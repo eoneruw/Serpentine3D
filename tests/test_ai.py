@@ -211,10 +211,12 @@ class ScriptedClient:
         self.sent = []
 
     def stream_message(self, system, messages, tools, max_tokens=8192,
-                       on_text=None, should_stop=None):
+                       on_text=None, should_stop=None, on_thinking=None):
         self.sent.append([dict(m) for m in messages])
         reply = self.replies.pop(0)
         for block in reply["content"]:
+            if block["type"] == "thinking" and on_thinking:
+                on_thinking(block["thinking"])
             if block["type"] == "text" and on_text:
                 on_text(block["text"])
         return reply
@@ -361,6 +363,69 @@ def test_panel_opens_and_runs_scripted_turn(tmp_path, monkeypatch):
     assert len(w.scene.all()) == 1
     assert panel.btn_send.text() == "Send"
     assert panel.input.isEnabled()
+
+
+def test_panel_says_what_it_is_waiting_for(monkeypatch):
+    """Seen live: a question sent, and nothing in the panel for a long
+    while. The model was thinking, which arrives as deltas the panel
+    rightly does not print, and a panel that prints nothing looks hung.
+    It says 'Connecting…' the moment Send is pressed, 'Thinking…' once
+    the model is heard from, 'Working…' after a tool while the next words
+    are awaited, and clears the line whenever there is something real to
+    show."""
+    _qapp()
+    from serpentine3d.app import MainWindow
+    w = MainWindow()
+    w._saved_revision = w.scene.revision
+    panel = w.show_ai_panel()
+    panel.key_edit.setText("sk-test")
+    panel._save_key()
+    panel._ensure_agent()
+    # the agent's worker is not the thing under test; hold it still and
+    # feed the panel the signals it would have sent, in the order it does
+    monkeypatch.setattr(panel.agent, "send", lambda text: None)
+    assert panel.status_text() == ""
+
+    panel.input.setPlainText("what is in the scene?")
+    panel._send()
+    assert panel.status_text() == "Connecting…"
+
+    panel._on_thinking("Box first, ")
+    panel._on_thinking("then fillet.")
+    assert panel.status_text() == "Thinking…"
+
+    panel._on_tool_start("scene_info", "scene_info")
+    assert panel.status_text() == "", "a running tool is its own sign of life"
+    panel._on_tool_finish("scene_info", True, "1 object")
+    assert panel.status_text() == "Working…"
+
+    panel._on_text("One box.")
+    assert panel.status_text() == "", "real words replace the status line"
+    panel._on_finished("end_turn")
+    assert panel.status_text() == ""
+    assert panel.btn_send.text() == "Send"
+
+
+def test_panel_status_counts_the_seconds(monkeypatch):
+    """A number that grows is the difference between 'waiting' and
+    'stuck': it says the panel is alive even when the model is not
+    saying anything yet."""
+    _qapp()
+    from serpentine3d.app import MainWindow
+    from serpentine3d.ai import panel as panel_mod
+    w = MainWindow()
+    w._saved_revision = w.scene.revision
+    panel = w.show_ai_panel()
+    now = [1000.0]
+    monkeypatch.setattr(panel_mod.time, "monotonic", lambda: now[0])
+    panel._set_status("Thinking…")
+    assert panel.status_text() == "Thinking…", "no count for the first moments"
+    now[0] += 12
+    panel._tick_status()
+    assert panel.status_text() == "Thinking…  12 s"
+    panel._clear_status()
+    assert panel.status_text() == ""
+    assert not panel._status_timer.isActive()
 
 
 def test_ai_command_registered():
