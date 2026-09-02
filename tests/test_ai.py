@@ -92,6 +92,51 @@ def test_client_accumulates_tool_input_json():
     assert reply["stop_reason"] == "tool_use"
 
 
+_THINKING_STREAM = [
+    ("content_block_start", {"index": 0, "content_block": {
+        "type": "thinking", "thinking": ""}}),
+    ("content_block_delta", {"index": 0, "delta": {
+        "type": "thinking_delta", "thinking": "Box first, "}}),
+    ("content_block_delta", {"index": 0, "delta": {
+        "type": "thinking_delta", "thinking": "then fillet."}}),
+    ("content_block_delta", {"index": 0, "delta": {
+        "type": "signature_delta", "signature": "sig_abc"}}),
+    ("content_block_stop", {"index": 0}),
+    ("content_block_start", {"index": 1,
+                             "content_block": {"type": "text", "text": ""}}),
+    ("content_block_delta", {"index": 1,
+                             "delta": {"type": "text_delta", "text": "Done."}}),
+    ("content_block_stop", {"index": 1}),
+    ("message_delta", {"delta": {"stop_reason": "end_turn"}, "usage": {}}),
+]
+
+
+def test_client_keeps_a_thinking_block_whole():
+    """Seen live: the model thought before answering, the stream kept only
+    the empty start of the thinking block, and the next turn sent it back as
+    history — 'API error 400: each thinking block must contain thinking'.
+    The block is kept with its text and signature so it can be echoed."""
+    client = _client(_sse(_THINKING_STREAM))
+    got = []
+    reply = client.stream_message("sys", [], tools=[], on_text=got.append)
+    assert "".join(got) == "Done.", "thinking is never shown as text"
+    assert reply["content"] == [
+        {"type": "thinking", "thinking": "Box first, then fillet.",
+         "signature": "sig_abc"},
+        {"type": "text", "text": "Done."},
+    ]
+
+
+def test_client_drops_an_unfinished_thinking_block():
+    """A thinking block with no signature cannot be echoed; better to lose
+    the thought than to poison every later turn of the conversation."""
+    cut = [e for e in _THINKING_STREAM
+           if e[1].get("delta", {}).get("type") != "signature_delta"]
+    client = _client(_sse(cut))
+    reply = client.stream_message("sys", [], tools=[])
+    assert reply["content"] == [{"type": "text", "text": "Done."}]
+
+
 def test_client_auth_error():
     client = _client(b'{"error": {"message": "bad key"}}', status=401)
     with pytest.raises(AuthError):
