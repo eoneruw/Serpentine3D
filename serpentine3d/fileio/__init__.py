@@ -20,6 +20,7 @@ IMPORT_FORMATS = [
     ("DXF", (".dxf",)),
     ("SVG", (".svg",)),
     ("glTF", (".glb", ".gltf")),
+    ("USD", (".usd", ".usda", ".usdc", ".usdz")),
 ]
 
 EXPORT_FORMATS = [
@@ -168,9 +169,13 @@ def _import_file(scene, path: str, ext: str, report) -> int:
     if ext == ".dxf":
         from . import dxf as dxf_mod
         return dxf_mod.import_dxf(scene, path)
-    if ext in (".glb", ".gltf"):
-        from . import gltf
-        named = gltf.import_gltf(path, units=scene.units)
+    if ext in (".glb", ".gltf", ".usd", ".usda", ".usdc", ".usdz"):
+        if ext in (".glb", ".gltf"):
+            from . import gltf
+            named = gltf.import_gltf(path, units=scene.units)
+        else:
+            from . import usd
+            named = usd.import_usd(path, units=scene.units)
         for name, shape, color in named:
             added = scene.add(shape, name=name)
             if color is not None:
