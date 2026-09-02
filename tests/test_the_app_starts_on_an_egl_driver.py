@@ -152,6 +152,42 @@ def test_nothing_is_pinned_when_there_is_no_context_to_measure(
     assert "PYOPENGL_PLATFORM" not in os.environ
 
 
+def test_a_mac_is_left_to_its_own_binding(monkeypatch,
+                                           unset_pyopengl_platform):
+    """Reported from an Apple Silicon Mac, on 0.8.2: the app died at
+    import with "Unable to load EGL library". The probe asks whether GLX
+    can see the context, and on a Mac nothing called libGL.so.1 exists,
+    so it concluded EGL — which macOS has no more than it has GLX.
+    PyOpenGL's own guess there, "darwin", was right, and the only way
+    past was to set PYOPENGL_PLATFORM=darwin by hand. GLX-or-EGL is a
+    Linux question; anywhere else we have nothing to correct and say
+    nothing."""
+    monkeypatch.setattr(glsetup.sys, "platform", "darwin")
+    monkeypatch.setattr(glsetup, "_pyopengl_already_chose", lambda: False)
+    monkeypatch.setattr(glsetup, "_qt_gl_binding",
+                        lambda: pytest.fail("the probe must not even run"))
+    assert glsetup.match_pyopengl_to_qt() is None
+    assert "PYOPENGL_PLATFORM" not in os.environ
+
+
+def test_windows_is_left_to_its_own_binding_too(monkeypatch,
+                                                unset_pyopengl_platform):
+    monkeypatch.setattr(glsetup.sys, "platform", "win32")
+    monkeypatch.setattr(glsetup, "_pyopengl_already_chose", lambda: False)
+    monkeypatch.setattr(glsetup, "_qt_gl_binding",
+                        lambda: pytest.fail("the probe must not even run"))
+    assert glsetup.match_pyopengl_to_qt() is None
+    assert "PYOPENGL_PLATFORM" not in os.environ
+
+
+def test_linux_is_still_asked(monkeypatch, unset_pyopengl_platform):
+    """The fix for the Mac must not undo the fix for Wayland."""
+    monkeypatch.setattr(glsetup.sys, "platform", "linux")
+    monkeypatch.setattr(glsetup, "_pyopengl_already_chose", lambda: False)
+    monkeypatch.setattr(glsetup, "_qt_gl_binding", lambda: "egl")
+    assert glsetup.match_pyopengl_to_qt() == "egl"
+
+
 def test_a_binding_chosen_by_hand_wins(monkeypatch, unset_pyopengl_platform):
     """Someone debugging a driver sets this; we do not argue."""
     os.environ["PYOPENGL_PLATFORM"] = "osmesa"

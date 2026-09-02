@@ -70,6 +70,12 @@ def match_pyopengl_to_qt() -> str | None:
         return None                     # someone chose by hand
     if _pyopengl_already_chose():
         return None                     # the variable is dead letter now
+    if not _has_glx_or_egl():
+        # GLX or EGL is a Linux question. A Mac has neither, so the probe
+        # below, finding no GLX, would answer "egl" — and PyOpenGL's EGL
+        # binding then fails to load on a machine whose own binding,
+        # "darwin", was right all along. Windows the same, with "nt".
+        return None
     binding = _qt_gl_binding()
     if binding is None:
         return None                     # nothing to measure, nothing to say
@@ -79,6 +85,15 @@ def match_pyopengl_to_qt() -> str | None:
 
 def _pyopengl_already_chose() -> bool:
     return "OpenGL.platform" in sys.modules
+
+
+def _has_glx_or_egl() -> bool:
+    """Whether the choice being made is one this platform offers at all.
+
+    PyOpenGL only ever picks between GLX and EGL on Linux and the BSDs;
+    macOS and Windows have one binding each and no variable can improve
+    on it."""
+    return sys.platform.startswith(("linux", "freebsd", "openbsd", "netbsd"))
 
 
 def _qt_gl_binding() -> str | None:

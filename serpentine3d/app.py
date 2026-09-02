@@ -2209,12 +2209,23 @@ class MainWindow(QMainWindow):
             self.command_line.focus()
             self.command_line.input.insert(text)
             return
-        if ev.key() == Qt.Key.Key_Delete:
+        if ev.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            # Both keys, because a Mac keyboard has one key labelled
+            # "delete" and it sends Backspace; forward-delete is fn+delete,
+            # which nobody finds. Rhino for Mac reads it the same way, and
+            # the sheet view here already did.
             self._delete_selected()
             return
         if ev.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
-            if not self.processor.busy and self.processor.last_command:
-                self.run_command(self.processor.last_command)
+            # Enter with the cursor in the viewport means what a right-click
+            # there means: mid-command it is the empty answer the prompt
+            # promised — "Next point (Enter to finish)" — and on an idle
+            # prompt it repeats the last command. It used to do only the
+            # second, so the prompt said Enter finishes and Enter did
+            # nothing until you clicked into the command line, while Escape
+            # worked from either place and threw the curve away.
+            if self.processor.busy or self.processor.last_command:
+                self._rmb_enter()
                 return
         super().keyPressEvent(ev)
 
