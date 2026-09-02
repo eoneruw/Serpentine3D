@@ -21,6 +21,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 docs = ["mkdocs>=1.6", "mkdocs-material>=9.5"]
+usd = ["usd-core>=24.3"]        # reading .usd/.usdc/.usdz (a large wheel)
 
 [project.urls]
 Homepage = "https://github.com/chisomobanzi/Serpentine3D"
