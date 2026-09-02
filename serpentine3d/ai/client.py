@@ -117,7 +117,14 @@ class AnthropicClient:
                 elif delta["type"] == "input_json_delta":
                     partial_json[idx] += delta["partial_json"]
                 elif delta["type"] == "thinking_delta":
-                    pass
+                    # Kept, not shown: the block goes back to the API as
+                    # history on the next turn, and it is rejected there
+                    # unless it is whole — text and signature both.
+                    blocks[idx]["thinking"] = (blocks[idx].get("thinking", "")
+                                               + delta["thinking"])
+                elif delta["type"] == "signature_delta":
+                    blocks[idx]["signature"] = (blocks[idx].get("signature", "")
+                                                + delta["signature"])
             elif event == "message_delta":
                 stop_reason = data["delta"].get("stop_reason", stop_reason)
                 usage.update(data.get("usage") or {})
@@ -133,8 +140,25 @@ class AnthropicClient:
                 raise AiError(
                     f"Model produced invalid tool input JSON: {exc}") \
                     from exc
-        return {"content": [b for b in blocks if b is not None],
+        return {"content": [b for b in blocks
+                            if b is not None and _echoable(b)],
                 "stop_reason": stop_reason, "usage": usage}
+
+
+def _echoable(block: dict) -> bool:
+    """Whether a streamed block can be sent back as conversation history.
+
+    The models the panel now talks to think before they answer, and the
+    stream used to record only that a thinking block had started: an empty
+    shell that, sent back as history on the next turn, the API refused with
+    "each thinking block must contain thinking" — every conversation died
+    on its second message. A thinking block is echoed whole or not at all;
+    one that was cut short (the stream aborted mid-thought) is dropped.
+    """
+    if block.get("type") in ("thinking", "redacted_thinking"):
+        return bool(block.get("thinking")) and bool(block.get("signature")) \
+            or block.get("type") == "redacted_thinking"
+    return True
 
 
 def _sse_events(lines):
