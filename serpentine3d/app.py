@@ -2209,7 +2209,11 @@ class MainWindow(QMainWindow):
             self.command_line.focus()
             self.command_line.input.insert(text)
             return
-        if ev.key() == Qt.Key.Key_Delete:
+        if ev.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            # Both keys, because a Mac keyboard has one key labelled
+            # "delete" and it sends Backspace; forward-delete is fn+delete,
+            # which nobody finds. Rhino for Mac reads it the same way, and
+            # the sheet view here already did.
             self._delete_selected()
             return
         if ev.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
