@@ -67,6 +67,7 @@ class Agent(QObject):
     """One conversation with the assistant, bound to a SerpApi."""
 
     textDelta = Signal(str)
+    thinkingDelta = Signal(str)             # reasoning in flight, not for show
     toolStarted = Signal(str, str)          # tool name, summary
     toolFinished = Signal(str, bool, str)   # name, ok, result summary
     turnFinished = Signal(str)              # stop reason
@@ -135,7 +136,8 @@ class Agent(QObject):
                 reply = self.client.stream_message(
                     system=self.system, messages=self.messages,
                     tools=T.TOOLS, on_text=self.textDelta.emit,
-                    should_stop=self._stop.is_set)
+                    should_stop=self._stop.is_set,
+                    on_thinking=self.thinkingDelta.emit)
                 self._track_usage(reply.get("usage") or {})
                 self.messages.append({"role": "assistant",
                                       "content": reply["content"]})
