@@ -234,7 +234,8 @@ class CodexClient:
                 "contentItems": [{"type": "inputText", "text": message}], "success": False}})
 
     def stream_message(self, system, messages, tools, max_tokens=4096,
-                       on_text=None, should_stop=None):
+                       on_text=None, should_stop=None,
+                       on_thinking=None):     # no reasoning stream here
         should_stop = should_stop or (lambda: False)
         latest = messages[-1]["content"]
         continuation = isinstance(latest, list) and any(

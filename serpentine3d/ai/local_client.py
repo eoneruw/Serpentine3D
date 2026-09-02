@@ -141,7 +141,8 @@ class LocalClient:
         return converted
 
     def stream_message(self, system, messages, tools, max_tokens=4096,
-                       on_text=None, should_stop=None):
+                       on_text=None, should_stop=None,
+                       on_thinking=None):     # no reasoning stream here
         payload = {"model": self.model, "messages": self._messages(system, messages),
                    "tools": [{"type": "function", "function": {
                        "name": t["name"], "description": t.get("description", ""),
