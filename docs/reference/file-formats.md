@@ -15,7 +15,7 @@ format is chosen by extension.
 | `.dxf` | ✓ | ✓ | Curves/meshes with layers; layout sheets export at paper scale |
 | `.svg` | ✓ | ✓ | Paths import as curves (béziers exact); layouts export as vector SVG |
 | `.glb` |  | ✓ | Binary glTF with materials (Unreal / Blender / web) |
-| `.usda` / `.usd` |  | ✓ | USD for virtual-production pipelines |
+| `.usd` / `.usda` / `.usdc` / `.usdz` | ✓ | ✓ | USD for virtual-production pipelines; exports `.usda`. Import (including `.usdz` from iPhone scans and AR Quick Look) needs Pixar's `usd-core` — `pip install serpentine3d[usd]` |
 
 ## Notes
 
