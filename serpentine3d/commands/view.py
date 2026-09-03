@@ -429,6 +429,31 @@ def cmd_rendered(ctx):
     yield from ()
 
 
+@command("pbr", aliases=("pbrrender", "advancedrender"), mutates=False)
+def cmd_pbr(ctx):
+    """Physically based display: materials lit by a studio environment,
+    with reflections, a clearcoat for paint, and filmic tone mapping.
+    Lives beside 'rendered' so the two can be compared."""
+    _vp(ctx).set_display_mode("pbr")
+    ctx.echo("PBR display. Assign looks with 'material' — try Carpaint.")
+    yield from ()
+
+
+@command("viewstats", aliases=("fps", "framestats"), mutates=False)
+def cmd_viewstats(ctx):
+    """Toggle the frame statistics readout (ms, fps, objects, triangles)
+    in every viewport. Also in Settings -> Display."""
+    vp = _vp(ctx)
+    on = not vp.show_stats
+    panes = ctx.window.all_viewports() if ctx.window else [vp]
+    for pane in panes:
+        pane.set_show_stats(on)
+    if ctx.window is not None:
+        ctx.window.cfg.set("display", "show_stats", on)
+    ctx.echo(f"Frame statistics {'on' if on else 'off'}.")
+    yield from ()
+
+
 @command("technical", aliases=("tech",), mutates=False)
 def cmd_technical(ctx):
     """Hidden-line technical display (parallel projection linework)."""
