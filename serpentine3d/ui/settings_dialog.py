@@ -476,7 +476,7 @@ class SettingsDialog(QDialog):
         self.cb_mode = QComboBox()
         from .viewport import VIEW_FLIGHT_MS, Viewport
         for mode in Viewport.DISPLAY_MODES:
-            self.cb_mode.addItem(mode.capitalize(), mode)
+            self.cb_mode.addItem(Viewport.mode_label(mode), mode)
         current = self.cfg.get("display", "default_mode", default="shaded")
         index = self.cb_mode.findData(current)
         self.cb_mode.setCurrentIndex(index if index >= 0 else 0)
@@ -498,6 +498,16 @@ class SettingsDialog(QDialog):
         row4.addWidget(self.sp_transition)
         row4.addStretch(1)
         layout.addLayout(row4)
+
+        self.cb_stats = QCheckBox(
+            "Show frame statistics in the viewport (ms, fps, triangles)")
+        self.cb_stats.setToolTip(
+            "A corner readout of what each frame costs — for comparing "
+            "display modes, or finding out which model is the slow one.")
+        self.cb_stats.setChecked(
+            bool(self.cfg.get("display", "show_stats", default=False)))
+        self.cb_stats.toggled.connect(self._display_changed)
+        layout.addWidget(self.cb_stats)
         layout.addStretch(1)
         return w
 
@@ -507,8 +517,11 @@ class SettingsDialog(QDialog):
         self.cfg.set("display", "default_mode", self.cb_mode.currentData())
         self.cfg.set("display", "view_transition_ms",
                      self.sp_transition.value())
+        self.cfg.set("display", "show_stats", self.cb_stats.isChecked())
         self.window.viewport.set_grid_params(self.sp_extent.value(),
                                              self.sp_major.value())
+        for vp in self.window.all_viewports():
+            vp.set_show_stats(self.cb_stats.isChecked())
 
     # ------------------------------------------------------------ shared
 
