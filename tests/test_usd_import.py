@@ -148,6 +148,20 @@ def test_display_colour_wins_then_the_bound_material(tmp_path):
 
 
 @needs_pxr
+def test_a_binding_without_the_api_schema_still_gives_a_colour(tmp_path):
+    """Sketchfab's glTF-to-USD conversions bind materials without applying
+    MaterialBindingAPI. Pixar's resolver warns and finds nothing; the
+    relationship is read directly, quietly."""
+    p = tmp_path / "sk.usda"
+    st = _quad_stage(p, material=(0, 1, 0))
+    prim = st.GetPrimAtPath("/Root/Quad")
+    prim.RemoveAPI(UsdShade.MaterialBindingAPI)
+    st.GetRootLayer().Save()
+    assert "MaterialBindingAPI" not in prim.GetAppliedSchemas()
+    assert usd.import_usd(str(p))[0][2] == pytest.approx((0, 1, 0))
+
+
+@needs_pxr
 def test_a_left_handed_mesh_is_turned_right_way_out(tmp_path):
     """Same index order, opposite orientation token: the author of the
     left-handed file meant the face the other way round, and the viewport

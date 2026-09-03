@@ -239,6 +239,29 @@ def _triangulate(counts: np.ndarray, idx: np.ndarray) -> np.ndarray:
     return np.vstack(tris) if tris else np.zeros((0, 3), np.int64)
 
 
+def _bound_material(prim, UsdShade):
+    """The material bound to a prim, by the book when the book was
+    followed and by the relationship when it was not.
+
+    Files converted from glTF (Sketchfab exports, for one) write the
+    material:binding relationship without applying the MaterialBindingAPI
+    schema. Pixar's resolver then prints a warning per prim and gives up,
+    and a hundred-part car is a hundred warnings and no colours. The
+    relationship is right there, so it is read directly in that case.
+    """
+    if prim.HasAPI(UsdShade.MaterialBindingAPI):
+        mat, _ = UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()
+        return mat if mat else None
+    rel = prim.GetRelationship("material:binding")
+    if not rel:
+        return None
+    for target in rel.GetTargets():
+        found = prim.GetStage().GetPrimAtPath(target)
+        if found and found.IsA(UsdShade.Material):
+            return UsdShade.Material(found)
+    return None
+
+
 def _color(prim, UsdGeom, UsdShade, time):
     """displayColor if authored, else the bound preview surface's diffuse."""
     try:
@@ -248,7 +271,7 @@ def _color(prim, UsdGeom, UsdShade, time):
             if vals:
                 r, g, b = vals[0]
                 return (float(r), float(g), float(b))
-        mat, _ = UsdShade.MaterialBindingAPI(prim).ComputeBoundMaterial()
+        mat = _bound_material(prim, UsdShade)
         if mat:
             shader, _, _ = mat.ComputeSurfaceSource()
             if shader:
