@@ -74,6 +74,20 @@ class PropertiesPanel(QWidget):
         self.scale_combo.currentTextChanged.connect(self._scale_chosen)
         self.scale_combo.lineEdit().editingFinished.connect(self._scale_typed)
 
+        # The look for the render modes: the same presets the `material`
+        # command offers, picked here without typing anything. Applies to
+        # every selected object, as the colour does.
+        from ..commands.edit import _MATERIAL_PRESETS
+        self.material_combo = QComboBox()
+        self.material_combo.addItem("None", None)
+        for name in _MATERIAL_PRESETS:
+            self.material_combo.addItem(name, name)
+        self.material_combo.addItem("Custom…", "Custom")
+        self.material_combo.setToolTip(
+            "How the surface looks in Rendered and PBR display; "
+            "Custom opens the material command for numbers")
+        self.material_combo.currentIndexChanged.connect(self._change_material)
+
         self.kind_label = QLabel("—")
         self.measure_label = QLabel("—")
         self.measure_label.setWordWrap(True)
@@ -84,6 +98,7 @@ class PropertiesPanel(QWidget):
         form.addRow("Name", self.name_edit)
         form.addRow("Layer", self.layer_combo)
         form.addRow("Colour", self.color_widget)
+        form.addRow("Material", self.material_combo)
         form.addRow("Linetype", self.linetype_combo)
         form.addRow("Lineweight", self.lineweight_edit)
         form.addRow("Scale", self.scale_combo)
@@ -174,6 +189,7 @@ class PropertiesPanel(QWidget):
         what it can answer.
         """
         self.form.setRowVisible(self.layer_combo, not (paper or detail))
+        self.form.setRowVisible(self.material_combo, not (paper or detail))
         self.form.setRowVisible(self.linetype_combo, paper)
         self.form.setRowVisible(self.lineweight_edit, paper)
         self.form.setRowVisible(self.scale_combo, detail)
@@ -190,11 +206,21 @@ class PropertiesPanel(QWidget):
         for layer in self.scene.layers.all():
             self.layer_combo.addItem(layer.name, layer.id)
 
-        if obj is None:
-            if len(objs) > 1:
-                self.header.setText(f"{len(objs)} objects selected")
-            else:
-                self.header.setText("No selection")
+        if obj is None and len(objs) > 1:
+            # Several picked: a name and a measurement belong to one thing,
+            # but a colour and a material are what you give a group. The
+            # swatch shows the first one's; the reset stays live if any of
+            # them has an override to remove.
+            self.header.setText(f"{len(objs)} objects selected")
+            self._blank_editors()
+            self.layer_combo.setEnabled(False)
+            self.color_widget.setEnabled(True)
+            self._show_swatch(self._ink_of(objs[0]))
+            self.color_reset.setEnabled(any(o.color is not None for o in objs))
+            self.material_combo.setEnabled(True)
+            self._show_material(objs)
+        elif obj is None:
+            self.header.setText("No selection")
             self._blank_editors()
             self.layer_combo.setEnabled(False)
         else:
@@ -210,6 +236,8 @@ class PropertiesPanel(QWidget):
             self.color_widget.setEnabled(True)
             self._show_swatch(self._ink_of(obj))
             self.color_reset.setEnabled(obj.color is not None)
+            self.material_combo.setEnabled(True)
+            self._show_material([obj])
 
     def _refresh_paper(self, papers: list):
         obj = papers[0] if len(papers) == 1 else None
@@ -262,6 +290,8 @@ class PropertiesPanel(QWidget):
         self.name_edit.setEnabled(False)
         self.color_widget.setEnabled(False)
         self.color_btn.setStyleSheet("")
+        self.material_combo.setEnabled(False)
+        self.material_combo.setCurrentIndex(-1)
         self.kind_label.setText("—")
         self.measure_label.setText("—")
 
@@ -295,36 +325,87 @@ class PropertiesPanel(QWidget):
             setattr(obj, key, value)
         self.scene.notify("layouts")
 
+    def _model_targets(self) -> list:
+        """Every model object the colour and material rows act on."""
+        if self._paper_picks():
+            return []
+        return self.selection.objects()
+
     def _pick_color(self):
         obj, _paper = self._current()
-        if obj is None:
+        targets = self._model_targets()
+        if obj is None and not targets:
             return
         from PySide6.QtGui import QColor
         from PySide6.QtWidgets import QColorDialog
-        current = QColor.fromRgbF(*self._ink_of(obj))
+        current = QColor.fromRgbF(*self._ink_of(obj or targets[0]))
         color = QColorDialog.getColor(current, self, "Object colour")
         if color.isValid():
             self._set_color((color.redF(), color.greenF(), color.blueF()))
 
     def _set_color(self, rgb):
         obj, paper = self._current()
-        if obj is None:
-            return
         if paper:
-            self._paper_edit("object colour", obj, color=tuple(rgb))
-        else:
-            self.history.checkpoint("object colour")
-            self.scene.update(obj.id, color=tuple(rgb))
+            if obj is not None:
+                self._paper_edit("object colour", obj, color=tuple(rgb))
+            return
+        targets = self._model_targets()
+        if not targets:
+            return
+        self.history.checkpoint("object colour")
+        self.scene.update_many([o.id for o in targets], color=tuple(rgb))
 
     def _reset_color(self):
         obj, paper = self._current()
-        if obj is None or obj.color is None:
-            return
         if paper:
-            self._paper_edit("object colour", obj, color=None)
+            if obj is not None and obj.color is not None:
+                self._paper_edit("object colour", obj, color=None)
+            return
+        targets = [o for o in self._model_targets() if o.color is not None]
+        if not targets:
+            return
+        self.history.checkpoint("object colour")
+        self.scene.update_many([o.id for o in targets], color=None)
+
+    # ------------------------------------------------------------- material
+
+    def _show_material(self, objs):
+        """The preset the selection has, blank when they disagree."""
+        from ..commands.edit import _MATERIAL_PRESETS
+        names = set()
+        for o in objs:
+            m = o.material
+            if not m:
+                names.add(None)
+                continue
+            match = next((n for n, p in _MATERIAL_PRESETS.items() if p == m),
+                         "Custom")
+            names.add(match)
+        if len(names) == 1:
+            idx = self.material_combo.findData(names.pop())
+            self.material_combo.setCurrentIndex(idx)
         else:
-            self.history.checkpoint("object colour")
-            self.scene.update(obj.id, color=None)
+            self.material_combo.setCurrentIndex(-1)
+
+    def _change_material(self, _index):
+        if self._updating:
+            return
+        targets = self._model_targets()
+        if not targets:
+            return
+        choice = self.material_combo.currentData()
+        if choice == "Custom":
+            # numbers are a conversation, and the command already has it
+            win = self.window()
+            run = getattr(win, "run_command", None)
+            if run is not None:
+                self.selection.set([o.id for o in targets])
+                run("material")
+            return
+        from ..commands.edit import _MATERIAL_PRESETS
+        mat = dict(_MATERIAL_PRESETS[choice]) if choice else None
+        self.history.checkpoint("material")
+        self.scene.update_many([o.id for o in targets], material=mat)
 
     def _measures(self, obj) -> str:
         fmt = self.scene.format_length
