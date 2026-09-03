@@ -609,6 +609,12 @@ _MATERIAL_PRESETS = {
     "Plastic": {"metallic": 0.0, "roughness": 0.35, "opacity": 1.0},
     "Metal":   {"metallic": 1.0, "roughness": 0.25, "opacity": 1.0},
     "Glass":   {"metallic": 0.0, "roughness": 0.05, "opacity": 0.35},
+    # Paint is a coloured base under a glossy clear film; the film is what
+    # the PBR display draws as the sharp studio reflection over a soft
+    # coloured one. The other modes read the base and ignore the coat.
+    "Carpaint": {"metallic": 0.1, "roughness": 0.4, "opacity": 1.0,
+                 "clearcoat": 1.0, "clearcoat_roughness": 0.06},
+    "Chrome":  {"metallic": 1.0, "roughness": 0.05, "opacity": 1.0},
 }
 
 
@@ -636,7 +642,7 @@ def cmd_material(ctx):
         mat = dict(_MATERIAL_PRESETS[preset])
     ctx.scene.update_many([o.id for o in objs], material=mat)
     ctx.echo(f"{preset if preset != 'Custom' else 'Custom'} material on "
-             f"{len(objs)} object(s) — see it with 'rendered'.")
+             f"{len(objs)} object(s) — see it with 'rendered' or 'pbr'.")
 
 
 @command("recordhistory", aliases=("history",), mutates=False)

@@ -22,6 +22,7 @@ _MODES = [
     ("shaded", "Shaded"),
     ("ghosted", "Ghosted"),
     ("rendered", "Rendered"),
+    ("pbr", "Rendered (PBR)"),          # keep in step with Viewport.MODE_LABELS
     ("technical", "Technical"),
     ("zebra", "Zebra"),
     ("curvature", "Curvature"),

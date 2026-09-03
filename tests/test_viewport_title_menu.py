@@ -116,7 +116,8 @@ def test_every_display_mode_is_reachable(win):
     the ones hardest to find by guessing a command name."""
     menu = win._viewport_menu(win.viewport)
     for mode in win.viewport.DISPLAY_MODES:
-        assert _menu_action(menu, mode.capitalize()) is not None, mode
+        label = win.viewport.mode_label(mode)
+        assert _menu_action(menu, label) is not None, mode
 
 
 def test_the_title_follows_the_view(win):
