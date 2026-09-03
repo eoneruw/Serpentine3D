@@ -215,6 +215,7 @@ class MainWindow(QMainWindow):
         self.ctx.current_path = None
         self.processor = CommandProcessor(self.ctx)
         self.ctx.add_echo_listener(self.command_line.echo)
+        self._last_mouse_world = None       # where the cursor last was
         self.processor.add_listener(self._sync_command_state)
 
         # wiring
@@ -1053,9 +1054,17 @@ class MainWindow(QMainWindow):
         self.command_line.set_options(self.processor.option_chips())
         self.command_line.set_keywords(self.processor.keyword_chips())
         # every pane, because a ghost is set on every pane: clearing one of
-        # them leaves a preview on the others that no command owns any more
+        # them leaves a preview on the others that no command owns any more.
+        # Unless the next prompt wants a ghost too: then the curve you were
+        # watching used to vanish on every click and come back on the next
+        # mouse move, while the rubber band stayed — a blink per point. It
+        # is redrawn at once for where the cursor already is instead.
+        ghost = None
+        if (isinstance(req, PointReq) and getattr(req, "preview_fn", None)
+                and self._last_mouse_world is not None):
+            ghost = self.processor.preview_for(self._last_mouse_world)
         for vp in self.all_viewports():
-            vp.set_ghost(None)
+            vp.set_ghost(ghost)
         self.command_line.point_pending = isinstance(req, PointReq)
         # Space submits like Enter everywhere but a free-text prompt
         self.command_line.text_pending = isinstance(req, TextReq)
@@ -1149,6 +1158,7 @@ class MainWindow(QMainWindow):
         # whichever pane the cursor is in, which is not the same as the one
         # last clicked in: the whole point of picking across panes is that
         # you can leave the one you started in without clicking on the way
+        self._last_mouse_world = point
         self._refresh_rubber(point, source=self.sender())
         req = self.processor.request
         if isinstance(req, PointReq) and getattr(req, "preview_fn", None):
