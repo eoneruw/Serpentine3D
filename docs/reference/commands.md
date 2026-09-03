@@ -89,6 +89,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `newviewport` (`newvp`, `splitview`) | Open an extra live viewport in a dockable panel — drag its title |
 | `ortho` | Toggle ortho: picked points lock to CPlane axes from the last |
 | `osnap` | Toggle one object-snap type (or All = the master switch) — |
+| `pbr` (`pbrrender`, `advancedrender`) | Physically based display: materials lit by a studio environment, |
 | `perspective` (`persp`) | Perspective |
 | `pictureframe` (`picture`) | Choose and place an embedded reference image for tracing. |
 | `pointsoff` (`pf`) | Pointsoff |
@@ -110,6 +111,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `units` | Set document units; optionally rescale the model to keep real size. |
 | `viewcapturetoclipboard` (`vcc`) | Copy the active viewport image to the clipboard. |
 | `viewcapturetofile` (`vcf`, `viewcapture`) | Save the active viewport as a PNG image. |
+| `viewstats` (`fps`, `framestats`) | Toggle the frame statistics readout (ms, fps, objects, triangles) |
 | `volume` (`vol`) | Volume |
 | `wireframe` (`wf`) | Wireframe |
 | `zebra` | Zebra |
