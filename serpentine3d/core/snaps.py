@@ -30,8 +30,24 @@ _APPARENT_LIMIT = 160
 _APPARENT_GAP = 1e-6
 
 
+#: A mesh with more vertices than this offers no snaps: a scanned car has
+#: millions, none of them anywhere in particular, and testing every one
+#: on every mouse move is what would make the viewport feel dead.
+MESH_SNAP_VERTEX_LIMIT = 20_000
+
+
 def _static_snap_points(shape) -> list[tuple[tuple, str]]:
     """end / mid / center / quad candidates for one shape."""
+    from .mesh import MeshShape
+    if isinstance(shape, MeshShape):
+        # A mesh is not a BRep and has no edges or centres to speak of;
+        # its vertices are its ends, as Rhino's mesh vertex snap has it.
+        # Asking a mesh the BRep questions raised on every mouse move and
+        # took picking and drawing down with it whenever a scan was open.
+        if len(shape.vertices) > MESH_SNAP_VERTEX_LIMIT:
+            return []
+        return [((float(x), float(y), float(z)), "end")
+                for x, y, z in shape.vertices]
     out = []
     seen = set()
 
