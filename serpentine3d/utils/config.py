@@ -196,6 +196,7 @@ RHINO_MACRO_MAP = {
     "setview world seisometric": "isometric",
     "setdisplaymode arctic": "rendered",
     "setdisplaymode rendered": "rendered",
+    "setdisplaymode raytraced": "pbr",
     "setdisplaymode shaded": "shaded",
     "setdisplaymode wireframe": "wireframe",
     "setdisplaymode ghosted": "ghosted",

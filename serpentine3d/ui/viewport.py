@@ -269,6 +269,107 @@ void main() {
 }
 """
 
+PBR_FRAG = """
+#version 330 core
+// Physically based shading lit by a prefiltered environment: GGX/Schlick
+// specular through the split-sum approximation (Karis 2013), diffuse from
+// nine spherical harmonics, an optional clearcoat lobe for car paint, and
+// ACES tone mapping. Colours arrive sRGB and leave sRGB; everything in
+// between is linear.
+in vec3 vNormal;
+in vec3 vPosView;
+in float vCurv;
+in float vWorldZ;
+uniform vec3 uColor;
+uniform float uAlpha;
+uniform float uMetallic;
+uniform float uRoughness;
+uniform float uClearcoat;
+uniform float uClearcoatRoughness;
+uniform mat3 uViewToWorld;    // rotates view-space vectors into world
+uniform sampler2D uEnv;       // equirect radiance, mip = roughness rung
+uniform float uEnvMaxLod;
+uniform vec3 uSH[9];
+uniform float uExposure;
+out vec4 frag;
+
+const float PI = 3.14159265;
+
+vec2 equirect(vec3 d) {
+    // +X at the middle column, +Z at the top row, matching ibl.py
+    float u = atan(d.y, d.x) / (2.0 * PI) + 0.5;
+    float v = acos(clamp(d.z, -1.0, 1.0)) / PI;
+    return vec2(u, v);
+}
+
+vec3 irradiance(vec3 n) {
+    float x = n.x, y = n.y, z = n.z;
+    vec3 e = uSH[0] * 0.282095
+           + uSH[1] * (0.488603 * y) + uSH[2] * (0.488603 * z)
+           + uSH[3] * (0.488603 * x)
+           + uSH[4] * (1.092548 * x * y) + uSH[5] * (1.092548 * y * z)
+           + uSH[6] * (0.315392 * (3.0 * z * z - 1.0))
+           + uSH[7] * (1.092548 * x * z)
+           + uSH[8] * (0.546274 * (x * x - y * y));
+    return max(e, vec3(0.0));
+}
+
+vec3 prefiltered(vec3 r, float roughness) {
+    return textureLod(uEnv, equirect(r), roughness * uEnvMaxLod).rgb;
+}
+
+// The environment BRDF (the second half of the split sum) as Karis'
+// analytic fit for mobile: no lookup table to ship.
+vec3 env_brdf(vec3 f0, float roughness, float nov) {
+    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+    const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 r = roughness * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28 * nov)) * r.x + r.y;
+    vec2 ab = vec2(-1.04, 1.04) * a004 + r.zw;
+    return f0 * ab.x + ab.y;
+}
+
+vec3 aces(vec3 x) {
+    // Narkowicz' fit of the ACES filmic curve
+    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+void main() {
+    vec3 n_view = normalize(vNormal);
+    if (!gl_FrontFacing) n_view = -n_view;
+    vec3 v_view = normalize(-vPosView);
+    vec3 n = normalize(uViewToWorld * n_view);
+    vec3 v = normalize(uViewToWorld * v_view);
+    float nov = max(dot(n, v), 1e-4);
+    vec3 r = reflect(-v, n);
+
+    vec3 base = pow(max(uColor, vec3(0.0)), vec3(2.2));   // sRGB -> linear
+    float metallic = clamp(uMetallic, 0.0, 1.0);
+    float rough = clamp(uRoughness, 0.045, 1.0);
+    vec3 f0 = mix(vec3(0.04), base, metallic);
+    vec3 diffuse_color = base * (1.0 - metallic);
+
+    vec3 diffuse = diffuse_color * irradiance(n);
+    vec3 specular = prefiltered(r, rough) * env_brdf(f0, rough, nov);
+    vec3 color = diffuse + specular;
+
+    if (uClearcoat > 0.0) {
+        // a glossy dielectric film over the base layer: its own lobe on
+        // top, and it takes from the base whatever it reflects
+        float cc_rough = clamp(uClearcoatRoughness, 0.045, 1.0);
+        vec3 cc_brdf = env_brdf(vec3(0.04), cc_rough, nov);
+        float fc = cc_brdf.x + cc_brdf.y;
+        vec3 cc = prefiltered(r, cc_rough) * fc;
+        color = color * (1.0 - uClearcoat * fc) + cc * uClearcoat;
+    }
+
+    color = aces(color * uExposure);
+    color = pow(color, vec3(1.0 / 2.2));                  // linear -> sRGB
+    frag = vec4(color, uAlpha);
+}
+"""
+
 LINE_VERT = """
 #version 330 core
 layout(location=0) in vec3 pos;
@@ -781,6 +882,24 @@ class Viewport(QOpenGLWidget):
         self._draw_readout.setVisible(False)
         self._draw_readout.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        # Frame statistics, for anyone asking "is this mode slow": a
+        # corner label with the time the last frames took, the rate that
+        # makes, and how much was drawn. Off unless Settings says so.
+        self._stats_label = QLabel(self)
+        self._stats_label.setStyleSheet(
+            "QLabel { background: rgba(20,21,24,200); color: #9fd39f;"
+            " border: 1px solid #4a4b52; border-radius: 4px;"
+            " padding: 2px 7px; font-family: monospace; font-size: 11px; }")
+        self._stats_label.setVisible(False)
+        self._stats_label.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.show_stats = bool(config.get("display", "show_stats",
+                                          default=False)) if config else False
+        self._frame_ms = []                 # the last few frames' paint times
+        self._frame_stamps = []             # when they were painted
+        self._frame_tris = 0                # triangles drawn this frame
+        self._frame_objs = 0                # objects drawn this frame
+        self._stats_shown_at = 0.0          # the label is refreshed 4x/s
         self._draw_span = None              # (from, to) of the open leg
         self._draw_frame = None             # (sides, corner) when it is a box
         self._readout_wanted = True         # only the pane under the cursor
@@ -849,6 +968,8 @@ class Viewport(QOpenGLWidget):
         self._marker_points: list = []
         self._last_mouse = None
         self._mesh_prog = self._line_prog = self._bg_prog = 0
+        self._pbr_prog = 0
+        self._env_tex = 0
         self._thick_prog = 0
         self._max_line_width = 1.0          # real cap read back in initializeGL
         self._uloc_cache: dict = {}
@@ -898,6 +1019,8 @@ class Viewport(QOpenGLWidget):
         self._drop_gpu_cache()
         self._grid = None
         self._mesh_prog = _compile(MESH_VERT, MESH_FRAG)
+        self._pbr_prog = _compile(MESH_VERT, PBR_FRAG)
+        self._env_tex = 0             # uploaded on the first PBR frame
         self._line_prog = _compile(LINE_VERT, LINE_FRAG)
         self._thick_prog = _compile(THICK_VERT, LINE_FRAG)
         self._bg_prog = _compile(BG_VERT, BG_FRAG)
@@ -1001,8 +1124,13 @@ class Viewport(QOpenGLWidget):
         """
         if self._paint_failed:
             return              # said why once; not once per repaint
+        started = time.perf_counter()
+        self._frame_tris = 0
+        self._frame_objs = 0
         try:
             self._paint_frame()
+            if self.show_stats:
+                self._note_frame(started)
         except Exception:                                       # noqa: BLE001
             self._paint_failed = True
             traceback.print_exc()
@@ -1185,6 +1313,45 @@ class Viewport(QOpenGLWidget):
         if self.space == "model" or self._drawing_through() is not None:
             return self.scene.format_length(length)
         return _units.format_length(length, "mm")
+
+    def set_show_stats(self, on: bool):
+        self.show_stats = bool(on)
+        if not self.show_stats:
+            self._stats_label.setVisible(False)
+            self._frame_ms.clear()
+            self._frame_stamps.clear()
+        self.update()
+
+    def _note_frame(self, started: float):
+        """Record this frame and, a few times a second, say what the last
+        ones cost. The paint time is the CPU side of a frame — the Python
+        draw loop and the GL calls it issues — which is where this app's
+        time goes; the rate is frames actually painted per second, which
+        only means something while something keeps the view repainting
+        (an orbit, a drag), and reads as a dash otherwise."""
+        now = time.perf_counter()
+        self._frame_ms.append((now - started) * 1000.0)
+        self._frame_stamps.append(now)
+        del self._frame_ms[:-30]
+        del self._frame_stamps[:-30]
+        if now - self._stats_shown_at < 0.25:
+            return
+        self._stats_shown_at = now
+        ms = sum(self._frame_ms) / len(self._frame_ms)
+        stamps = [t for t in self._frame_stamps if now - t <= 1.0]
+        fps = f"{len(stamps):>3d} fps" if len(stamps) >= 2 else "  – fps"
+        tris = self._frame_tris
+        tri_s = (f"{tris / 1e6:.2f}M" if tris >= 1e6
+                 else f"{tris / 1e3:.0f}k" if tris >= 1e3 else str(tris))
+        self._stats_label.setText(
+            f"{ms:5.1f} ms  {fps}  {self._frame_objs} obj  {tri_s} tri  "
+            f"{self.display_mode}")
+        self._stats_label.adjustSize()
+        self._stats_label.move(self.width() - self._stats_label.width() - 8,
+                               8)
+        if not self._stats_label.isVisible():
+            self._stats_label.setVisible(True)
+        self._stats_label.raise_()
 
     def _update_draw_readout(self):
         """Show how long the leg under the cursor is while a command is
@@ -1868,7 +2035,9 @@ class Viewport(QOpenGLWidget):
         mode = mode_override or self.display_mode
         fill_alpha = {"shaded": 1.0, "ghosted": 0.35, "wireframe": 0.0,
                       "zebra": 1.0, "curvature": 1.0, "draft": 1.0,
-                      "rendered": 1.0}[mode]
+                      "rendered": 1.0, "pbr": 1.0}[mode]
+        pbr = mode == "pbr"
+        fill_prog = self._pbr_prog if pbr else self._mesh_prog
         curv_range = self._curvature_range() if mode == "curvature" else 0.0
         show_isos = self.shows_isocurves(mode)
         show_edges = self.shows_edges(mode)
@@ -1881,7 +2050,7 @@ class Viewport(QOpenGLWidget):
         clips_dirty = False           # True while anchored clips are bound
         for i in range(len(clips)):
             GL.glEnable(GL.GL_CLIP_DISTANCE0 + i)
-        for prog in (self._mesh_prog, self._line_prog, self._thick_prog):
+        for prog in (fill_prog, self._line_prog, self._thick_prog):
             self._set_clip_uniforms(prog, clips)
         translucent = mode == "ghosted" or any(
             (o.material or {}).get("opacity", 1.0) < 1.0 for o in objects)
@@ -1891,11 +2060,13 @@ class Viewport(QOpenGLWidget):
             centres, valid = self._centres_for(objects)
             order = _back_to_front(centres, valid, eye)
             objects = [objects[i] for i in order]
-        if mode == "rendered":
+        if mode in self.RENDER_MODES:
             # before culling: an object above the frustum can still stamp a
             # shadow that is inside it
             self._draw_ground_shadow(mvp, objects)
         objects = self._cull(mvp, objects)
+        if pbr:
+            self._bind_environment(view)
         # Uniform state belongs to the program, not the draw call. The
         # display-mode uniforms are the same for every object in the
         # frame, so they are set once here; the matrices moved into the
@@ -1932,7 +2103,7 @@ class Viewport(QOpenGLWidget):
                 # The GPU dots the planes with the rebased pos, so an
                 # anchored object needs them re-expressed around its
                 # anchor, and the next unanchored one needs them back.
-                for prog in (self._mesh_prog, self._line_prog,
+                for prog in (fill_prog, self._line_prog,
                              self._thick_prog):
                     self._set_clip_uniforms(prog, oclips)
                 clips_dirty = gpu.anchor is not None
@@ -1943,15 +2114,17 @@ class Viewport(QOpenGLWidget):
                 color = (grey, grey, grey)
             line_color = color
             surface = color
-            if mode == "rendered" and not selected and not obj.locked:
+            if mode in self.RENDER_MODES and not selected and not obj.locked:
                 # An imported object can display one colour and render
                 # another; edges stay on the one it displays, the way Rhino
                 # draws them.
                 surface = self.scene.render_color_of(obj)
             # Surfaces are shaded by multiplying this colour, so a near-black
             # one leaves nothing to shade. Lift the fill only — edges keep the
-            # object's real colour, so black stays black in wireframe.
-            fill_color = theme.shaded_fill(surface)
+            # object's real colour, so black stays black in wireframe. Not
+            # in PBR: there black paint is black, and what makes it read as
+            # a solid is the studio reflected in it.
+            fill_color = surface if pbr else theme.shaded_fill(surface)
             if light_background and not selected:
                 # dark linework on paper-white detail backgrounds
                 line_color = (min(color[0], 0.3), min(color[1], 0.3),
@@ -1962,26 +2135,37 @@ class Viewport(QOpenGLWidget):
             else:
                 fill_alpha_obj = fill_alpha
             if fill_alpha_obj > 0 and gpu.tri_count:
-                self._use(self._mesh_prog)
-                self._set_mvp(self._mesh_prog, omvp)
-                self._set_view(self._mesh_prog, oview)
+                self._use(fill_prog)
+                self._set_mvp(fill_prog, omvp)
+                self._set_view(fill_prog, oview)
                 GL.glUniform3f(
-                    self._uloc(self._mesh_prog, "uColor"),
+                    self._uloc(fill_prog, "uColor"),
                     *fill_color)
                 GL.glUniform1f(
-                    self._uloc(self._mesh_prog, "uAlpha"),
+                    self._uloc(fill_prog, "uAlpha"),
                     fill_alpha_obj)
                 m = obj.material or {}
                 opacity = float(m.get("opacity", 1.0))
                 GL.glUniform1f(
-                    self._uloc(self._mesh_prog, "uMetallic"),
+                    self._uloc(fill_prog, "uMetallic"),
                     float(m.get("metallic", 0.0)))
+                # An object nobody gave a material is a dull plastic in
+                # rendered mode; in PBR it is given a little gloss so the
+                # studio shows in it at all — matte white under a soft sky
+                # is one flat tone, which is not what a render is for.
                 GL.glUniform1f(
-                    self._uloc(self._mesh_prog, "uRoughness"),
-                    float(m.get("roughness", 0.55)))
+                    self._uloc(fill_prog, "uRoughness"),
+                    float(m.get("roughness", 0.35 if pbr else 0.55)))
+                if pbr:
+                    GL.glUniform1f(
+                        self._uloc(fill_prog, "uClearcoat"),
+                        float(m.get("clearcoat", 0.0)))
+                    GL.glUniform1f(
+                        self._uloc(fill_prog, "uClearcoatRoughness"),
+                        float(m.get("clearcoat_roughness", 0.1)))
                 if opacity < 1.0:
                     GL.glUniform1f(
-                        self._uloc(self._mesh_prog, "uAlpha"),
+                        self._uloc(fill_prog, "uAlpha"),
                         fill_alpha * opacity)
                 if mode == "ghosted" or opacity < 1.0 \
                         or obj.clip_plane is not None:
@@ -1993,6 +2177,8 @@ class Viewport(QOpenGLWidget):
                                   GL.GL_UNSIGNED_INT, ctypes.c_void_p(0))
                 GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
                 GL.glDepthMask(True)
+                self._frame_tris += gpu.tri_count // 3
+            self._frame_objs += 1
 
             # `not gpu.tri_count` is a curve, a point cloud, an annotation:
             # something whose lines are the object rather than the outline
@@ -2092,6 +2278,53 @@ class Viewport(QOpenGLWidget):
             GL.glDisable(GL.GL_CLIP_DISTANCE0 + i)
         for prog in (self._mesh_prog, self._line_prog, self._thick_prog):
             self._set_clip_uniforms(prog, [])
+
+    def _bind_environment(self, view):
+        """Put the studio around the model: the prefiltered environment on
+        texture unit 0 with its roughness ladder as mip levels, the
+        irradiance harmonics, and the rotation that takes the shader's
+        view-space vectors back into the world the studio is fixed in.
+
+        Building the maps takes about a second and happens once per
+        process (ibl.studio_lighting is cached); uploading them happens
+        once per GL context.
+        """
+        from . import ibl
+        ladder, sh = ibl.studio_lighting()
+        if not self._env_tex:
+            self._env_tex = GL.glGenTextures(1)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self._env_tex)
+            for level, img in enumerate(ladder):
+                h, w = img.shape[:2]
+                GL.glTexImage2D(GL.GL_TEXTURE_2D, level, GL.GL_RGB16F, w, h,
+                                0, GL.GL_RGB, GL.GL_FLOAT,
+                                np.ascontiguousarray(img, np.float32))
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAX_LEVEL,
+                               len(ladder) - 1)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER,
+                               GL.GL_LINEAR_MIPMAP_LINEAR)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER,
+                               GL.GL_LINEAR)
+            # wrap around the seam at the back; clamp at the poles
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S,
+                               GL.GL_REPEAT)
+            GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
+                               GL.GL_CLAMP_TO_EDGE)
+        prog = self._pbr_prog
+        self._use(prog)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self._env_tex)
+        GL.glUniform1i(self._uloc(prog, "uEnv"), 0)
+        GL.glUniform1f(self._uloc(prog, "uEnvMaxLod"), float(len(ladder) - 1))
+        GL.glUniform3fv(self._uloc(prog, "uSH"), 9,
+                        np.ascontiguousarray(sh, np.float32))
+        GL.glUniform1f(self._uloc(prog, "uExposure"), 0.8)
+        # the view matrix's rotation part, inverted: it is orthonormal, so
+        # the transpose does, and the anchors only ever shift the
+        # translation, so one rotation serves every object in the frame
+        rot = np.asarray(view, np.float64)[:3, :3].T
+        GL.glUniformMatrix3fv(self._uloc(prog, "uViewToWorld"), 1, GL.GL_TRUE,
+                              np.ascontiguousarray(rot, np.float32))
 
     def _draw_ground_shadow(self, mvp, objects):
         """Flatten object triangles onto z=0 as a soft dark stamp."""
@@ -2851,7 +3084,22 @@ class Viewport(QOpenGLWidget):
         return True
 
     DISPLAY_MODES = ("shaded", "wireframe", "ghosted", "zebra",
-                     "curvature", "technical", "draft", "rendered")
+                     "curvature", "technical", "draft", "rendered", "pbr")
+
+    #: Modes that shade with materials and put a shadow on the ground —
+    #: the ones a person means by "render". `rendered` is the original
+    #: three-lamp look; `pbr` lights the same materials from a studio
+    #: environment with physically based shading, and lives beside it so
+    #: the two can be compared on the same model.
+    RENDER_MODES = ("rendered", "pbr")
+
+    #: What a mode is called where a person reads it. Most are their own
+    #: name with a capital; the exceptions are spelt out here.
+    MODE_LABELS = {"pbr": "Rendered (PBR)"}
+
+    @classmethod
+    def mode_label(cls, mode: str) -> str:
+        return cls.MODE_LABELS.get(mode, mode.capitalize())
 
     def set_display_mode(self, mode: str):
         if mode not in self.DISPLAY_MODES:
@@ -2874,7 +3122,12 @@ class Viewport(QOpenGLWidget):
     #: Modes that leave surface isocurves off unless asked. Only rendered:
     #: a render showing the wire cage of every surface is not a render, and
     #: it is what GitHub #5 was looking at.
-    _ISO_OFF_MODES = ("rendered",)
+    _ISO_OFF_MODES = ("rendered", "pbr")
+    #: Modes that leave surface edges off unless asked. A physically based
+    #: render with a black outline round every face reads as a technical
+    #: illustration, and the outlines hide the very highlights along the
+    #: edges that the mode exists to show.
+    _EDGE_OFF_MODES = ("pbr",)
 
     def shows_isocurves(self, mode: str | None = None) -> bool:
         """Whether surface isocurves are drawn in this pane.
@@ -2889,8 +3142,11 @@ class Viewport(QOpenGLWidget):
 
     def shows_edges(self, mode: str | None = None) -> bool:
         """Whether surface and mesh edges are drawn in this pane. Every mode
-        wants them; the override is there for the odd render that doesn't."""
-        return True if self._edge_override is None else self._edge_override
+        but the PBR render wants them; the override is there for the odd
+        render that doesn't, or the odd PBR view that does."""
+        if self._edge_override is not None:
+            return self._edge_override
+        return (mode or self.display_mode) not in self._EDGE_OFF_MODES
 
     def set_isocurves(self, on: bool | None):
         """True or False to overrule the mode, None to follow it again."""
