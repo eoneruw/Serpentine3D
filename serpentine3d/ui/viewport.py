@@ -1937,13 +1937,19 @@ class Viewport(QOpenGLWidget):
                     self._set_clip_uniforms(prog, oclips)
                 clips_dirty = gpu.anchor is not None
             selected = self.selection.is_selected(obj.id)
-            color = theme.SELECTION_COLOR if selected else self.scene.color_of(obj)
+            own = self.scene.color_of(obj)
+            color = theme.SELECTION_COLOR if selected else own
             if obj.locked and not selected:
-                grey = (color[0] + color[1] + color[2]) / 3 * 0.55 + 0.18
+                grey = (own[0] + own[1] + own[2]) / 3 * 0.55 + 0.18
                 color = (grey, grey, grey)
             line_color = color
-            surface = color
-            if mode == "rendered" and not selected and not obj.locked:
+            # The wires go gold when picked; the surface keeps the object's
+            # own colour and is only tinted (below), so a colour or material
+            # change shows the moment it is made instead of after the next
+            # deselect. Locked objects are the exception: their grey is the
+            # whole point.
+            surface = color if obj.locked and not selected else own
+            if mode == "rendered" and not obj.locked:
                 # An imported object can display one colour and render
                 # another; edges stay on the one it displays, the way Rhino
                 # draws them.
@@ -1952,6 +1958,8 @@ class Viewport(QOpenGLWidget):
             # one leaves nothing to shade. Lift the fill only — edges keep the
             # object's real colour, so black stays black in wireframe.
             fill_color = theme.shaded_fill(surface)
+            if selected:
+                fill_color = theme.selected_fill(fill_color)
             if light_background and not selected:
                 # dark linework on paper-white detail backgrounds
                 line_color = (min(color[0], 0.3), min(color[1], 0.3),
@@ -1997,8 +2005,11 @@ class Viewport(QOpenGLWidget):
             # `not gpu.tri_count` is a curve, a point cloud, an annotation:
             # something whose lines are the object rather than the outline
             # of a face. Those are never what "show edges" is asking about,
-            # and switching them off would empty the drawing.
-            if gpu.line_count and (show_edges or not gpu.tri_count):
+            # and switching them off would empty the drawing. A picked
+            # object shows its gold wires regardless: with the fill only
+            # tinted now, they are what says "selected".
+            if gpu.line_count and (show_edges or selected
+                                   or not gpu.tri_count):
                 if selected:
                     edge_color = (*theme.SELECTION_COLOR, 1.0)
                 elif obj.kind == "curve":
