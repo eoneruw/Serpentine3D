@@ -4,11 +4,61 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QComboBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout, QWidget,
+    QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
+    QLabel, QLineEdit, QVBoxLayout, QWidget,
 )
 
 from ..core import geometry as g
 from ..core.layout import DetailView, PaperObject, parse_scale
+
+
+class CustomMaterialDialog(QDialog):
+    """The five numbers of a look, each a slider-less spin box with a plain
+    name, prefilled from the first selected object so a tweak starts from
+    what is there rather than from zero."""
+
+    FIELDS = (
+        ("metallic", "Metallic", 0.0, "0 = paint or plastic, 1 = bare metal"),
+        ("roughness", "Roughness", 0.5, "0 = mirror, 1 = chalk"),
+        ("opacity", "Opacity", 1.0, "1 = solid, lower for glass"),
+        ("clearcoat", "Clearcoat", 0.0,
+         "A glossy clear film over the base, as car paint has (PBR display)"),
+        ("clearcoat_roughness", "Clearcoat roughness", 0.1,
+         "How sharp the film's reflection is (PBR display)"),
+    )
+
+    def __init__(self, parent=None, current: dict | None = None):
+        super().__init__(parent)
+        self.setWindowTitle("Custom material")
+        form = QFormLayout(self)
+        self.spins = {}
+        current = current or {}
+        for key, label, default, tip in self.FIELDS:
+            spin = QDoubleSpinBox()
+            spin.setRange(0.0, 1.0)
+            spin.setSingleStep(0.05)
+            spin.setDecimals(2)
+            spin.setValue(float(current.get(key, default)))
+            spin.setToolTip(tip)
+            form.addRow(label, spin)
+            self.spins[key] = spin
+        self.spins["opacity"].setMinimum(0.05)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok
+                                   | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        form.addRow(buttons)
+
+    def material(self) -> dict:
+        return {key: round(spin.value(), 3) for key, spin in self.spins.items()}
+
+    @classmethod
+    def ask(cls, parent, current: dict | None) -> dict | None:
+        """The material chosen, or None if the dialog was dismissed."""
+        dlg = cls(parent, current)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            return dlg.material()
+        return None
 from ..core.linetype import LINETYPES
 from .layout_view import LINE_VISIBLE
 
@@ -395,15 +445,18 @@ class PropertiesPanel(QWidget):
             return
         choice = self.material_combo.currentData()
         if choice == "Custom":
-            # numbers are a conversation, and the command already has it
-            win = self.window()
-            run = getattr(win, "run_command", None)
-            if run is not None:
-                self.selection.set([o.id for o in targets])
-                run("material")
-            return
-        from ..commands.edit import _MATERIAL_PRESETS
-        mat = dict(_MATERIAL_PRESETS[choice]) if choice else None
+            # The numbers, in a dialog over the panel. Handing this to the
+            # `material` command took the selection as its first answer,
+            # which emptied the panel and greyed this very row: a trap.
+            mat = CustomMaterialDialog.ask(self, targets[0].material)
+            if mat is None:
+                self._updating = True
+                self._show_material(targets)      # back to what they have
+                self._updating = False
+                return
+        else:
+            from ..commands.edit import _MATERIAL_PRESETS
+            mat = dict(_MATERIAL_PRESETS[choice]) if choice else None
         self.history.checkpoint("material")
         self.scene.update_many([o.id for o in targets], material=mat)
 
