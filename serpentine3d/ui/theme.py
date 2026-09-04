@@ -44,6 +44,25 @@ SHADED_AMBIENT = 0.30
 FILL_FLOOR = 0.42
 FILL_KNEE = 0.50
 
+# How far a selected surface leans toward the selection gold. Enough that
+# a picked object reads as picked from across the room, not so much that
+# red stops looking red: the wires already carry the gold at full strength.
+SELECTION_TINT = 0.30
+
+
+def selected_fill(color):
+    """The fill of a selected surface: its own colour, leaned toward gold.
+
+    A selected object used to be painted solid gold, wires and surface both,
+    which hid the one thing you most often do to a selection — change its
+    colour or material. Nothing looked different until you deselected, and
+    then it changed all at once. Now the fill keeps the object's colour and
+    takes a tint of the selection colour; the wires alone go full gold.
+    """
+    t = SELECTION_TINT
+    g = SELECTION_COLOR
+    return tuple(c * (1.0 - t) + s * t for c, s in zip(color[:3], g))
+
 
 def shaded_fill(color):
     """The colour to shade a surface with, lifted clear of black.
