@@ -101,3 +101,49 @@ def test_the_rows_are_undoable(win):
     assert win.scene.get(a.id).material is not None
     win.processor.run("undo")
     assert win.scene.get(a.id).material is None
+
+
+def test_custom_opens_a_dialog_and_applies_its_numbers(win, monkeypatch):
+    """Custom used to hand over to the `material` command, whose first
+    prompt took the selection — the panel went blank and this very row
+    greyed out, with no way back. Now it is a dialog with the numbers."""
+    from serpentine3d.ui import properties as props
+    a, b = _two(win)
+    monkeypatch.setattr(props.CustomMaterialDialog, "ask",
+                        classmethod(lambda cls, parent, current:
+                                    {"metallic": 0.2, "roughness": 0.3,
+                                     "opacity": 1.0, "clearcoat": 0.5,
+                                     "clearcoat_roughness": 0.1}))
+    combo = win.properties.material_combo
+    combo.setCurrentIndex(combo.findData("Custom"))
+    assert win.scene.get(a.id).material["clearcoat"] == 0.5
+    assert win.scene.get(b.id).material["clearcoat"] == 0.5
+    assert win.selection.ids, "the selection survives"
+    assert combo.isEnabled()
+    win.properties.refresh()
+    assert combo.currentData() == "Custom", "a non-preset shows as Custom"
+    # and a preset can be picked again afterwards
+    combo.setCurrentIndex(combo.findData("Metal"))
+    assert win.scene.get(a.id).material == _MATERIAL_PRESETS["Metal"]
+
+
+def test_cancelling_custom_leaves_everything_as_it_was(win, monkeypatch):
+    from serpentine3d.ui import properties as props
+    a, b = _two(win)
+    combo = win.properties.material_combo
+    combo.setCurrentIndex(combo.findData("Glass"))
+    monkeypatch.setattr(props.CustomMaterialDialog, "ask",
+                        classmethod(lambda cls, parent, current: None))
+    combo.setCurrentIndex(combo.findData("Custom"))
+    assert win.scene.get(a.id).material == _MATERIAL_PRESETS["Glass"]
+    assert combo.currentData() == "Glass", "the row shows what they still have"
+
+
+def test_the_dialog_starts_from_what_the_object_has():
+    from serpentine3d.ui.properties import CustomMaterialDialog
+    QApplication.instance() or QApplication([])
+    dlg = CustomMaterialDialog(None, {"metallic": 0.7, "roughness": 0.2,
+                                      "opacity": 0.9})
+    m = dlg.material()
+    assert m["metallic"] == 0.7 and m["roughness"] == 0.2
+    assert m["clearcoat"] == 0.0, "absent fields take the defaults"
