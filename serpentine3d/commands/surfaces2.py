@@ -453,16 +453,27 @@ def cmd_extendsrf(ctx):
 
 @command("blendsrf")
 def cmd_blendsrf(ctx):
-    """G1 blend surface between two Ctrl+Shift-picked surface edges."""
+    """Blend surface across the gap between two surface edges.
+
+    Ctrl+Shift-click an edge on each surface first, or run it and pick
+    them at the prompt. Tangent (G1) to both surfaces where it can be;
+    where the two edges will not take a tangent blend it says so and
+    makes the plain surface between them instead, rather than nothing.
+    """
     picked = _picked_face_edges(ctx)
     if len(picked) != 2:
-        ctx.echo("Ctrl+Shift-click one edge on each of two surfaces, "
-                 "then run BlendSrf.")
-        yield from ()
+        yield SelectReq("Ctrl+Shift-click one edge on each of the two "
+                        "surfaces, then Enter",
+                        min_count=0, allow_preselected=False)
+        picked = _picked_face_edges(ctx)
+    if len(picked) != 2:
+        ctx.echo(f"BlendSrf needs one edge picked on each of two surfaces "
+                 f"— {len(picked)} picked. Nothing made.")
         return
     (oa, fa, ea, _), (ob, fb, eb, _) = picked
-    blend = g.blend_surfaces(fa, ea, fb, eb)
+    blend, how = g.blend_surfaces_somehow(fa, ea, fb, eb)
     obj = ctx.scene.add(blend, layer_id=oa.layer_id)
-    ctx.echo(f"Created blend {obj.name} between "
-             f"{oa.name} and {ob.name}.")
-    yield from ()
+    ctx.select_result([obj])
+    ctx.echo(f"Created blend {obj.name} between {oa.name} and {ob.name}"
+             + ("." if how == "G1" else
+                f" — {how}."))

@@ -10,6 +10,12 @@
   and nothing picked. Meta now counts as Ctrl for sub-object picks and
   for holding control points, and the fabricated right click carries the
   pick when Shift is down. ⌘+Shift works as it always did.
+- **BlendSrf asks for its edges, and always makes something.** Run with
+  nothing picked it printed an instruction and ended; with two edges
+  that would not take a tangent blend it raised. Both looked like a
+  command doing nothing. Now it prompts for the two edges when it has
+  to, and steps down from G1 to a G0 blend to a ruled surface, saying
+  which it made.
 
 ## 0.9.1 — 2026-09-08
 

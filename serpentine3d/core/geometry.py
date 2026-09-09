@@ -3854,8 +3854,12 @@ def extend_surface(shape, edge_index: int, length: float) -> TopoDS_Shape:
     return out
 
 
-def blend_surfaces(face_a, edge_a, face_b, edge_b) -> TopoDS_Shape:
-    """G1 blend surface between two surface edges (straight side rails)."""
+def blend_surfaces(face_a, edge_a, face_b, edge_b,
+                   continuity: str = "G1") -> TopoDS_Shape:
+    """Blend surface between two surface edges (straight side rails).
+
+    G1 leaves the two surfaces tangentially; G0 only meets their edges.
+    """
     import math
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeFilling
     from OCP.GeomAbs import GeomAbs_Shape
@@ -3864,21 +3868,54 @@ def blend_surfaces(face_a, edge_a, face_b, edge_b) -> TopoDS_Shape:
     if (math.dist(a0, b0) + math.dist(a1, b1)
             > math.dist(a0, b1) + math.dist(a1, b0)):
         b0, b1 = b1, b0
+    order = (GeomAbs_Shape.GeomAbs_G1 if continuity == "G1"
+             else GeomAbs_Shape.GeomAbs_C0)
     fill = BRepOffsetAPI_MakeFilling()
-    fill.Add(occ.to_edge(edge_a), occ.to_face(face_a),
-             GeomAbs_Shape.GeomAbs_G1, True)
-    fill.Add(occ.to_edge(edge_b), occ.to_face(face_b),
-             GeomAbs_Shape.GeomAbs_G1, True)
+    fill.Add(occ.to_edge(edge_a), occ.to_face(face_a), order, True)
+    fill.Add(occ.to_edge(edge_b), occ.to_face(face_b), order, True)
     if math.dist(a0, b0) > 1e-9:
         fill.Add(occ.to_edge(make_line(a0, b0)),
                  GeomAbs_Shape.GeomAbs_C0, True)
     if math.dist(a1, b1) > 1e-9:
         fill.Add(occ.to_edge(make_line(a1, b1)),
                  GeomAbs_Shape.GeomAbs_C0, True)
-    fill.Build()
-    if not fill.IsDone():
+    try:
+        fill.Build()
+        done = fill.IsDone()
+    except Exception:                                    # noqa: BLE001
+        done = False                # OCCT raises rather than fails, at times
+    if not done:
         raise GeometryError("Blend failed between these edges")
     result = fill.Shape()
     if result.IsNull():
         raise GeometryError("Blend produced no surface")
     return result
+
+
+def blend_surfaces_somehow(face_a, edge_a, face_b, edge_b):
+    """The best surface that will build across the gap, and what it is.
+
+    A G1 blend first. Edges that will not take one — too far apart, too
+    twisted, too unlike in length — used to be an error and no surface,
+    which from the viewport looked like the command doing nothing. Now
+    it steps down: a surface that only meets the edges (G0), then a
+    ruled surface straight between them. Returns (shape, how), where
+    how is "G1" or a sentence saying what was made instead.
+    """
+    try:
+        return blend_surfaces(face_a, edge_a, face_b, edge_b, "G1"), "G1"
+    except GeometryError:
+        pass
+    try:
+        return (blend_surfaces(face_a, edge_a, face_b, edge_b, "G0"),
+                "the edges would not take a tangent blend, so this one "
+                "only meets them (G0)")
+    except GeometryError:
+        pass
+    try:
+        return (loft([edge_a, edge_b], ruled=True),
+                "the edges would not take a blend, so this is a ruled "
+                "surface straight between them")
+    except GeometryError:
+        raise GeometryError("No surface will build between these two "
+                            "edges — try edges that face each other")
