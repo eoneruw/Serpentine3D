@@ -12,11 +12,11 @@ import numpy as np
 from . import geometry, occ
 
 SNAP_TYPES = ("end", "mid", "center", "quad", "int", "appint", "perp",
-              "near")
+              "near", "vertex")
 
 # priority when several candidates fall inside the pick radius
 _PRIORITY = {"end": 0, "int": 1, "appint": 2, "quad": 3, "mid": 4,
-             "center": 5, "perp": 6, "near": 7}
+             "center": 5, "perp": 6, "near": 7, "vertex": 8}
 
 # How many screen segments near the cursor get paired up. Every pair is
 # tried, so the cost is square, and a drawing dense enough to put more than
@@ -40,13 +40,17 @@ def _static_snap_points(shape) -> list[tuple[tuple, str]]:
     """end / mid / center / quad candidates for one shape."""
     from .mesh import MeshShape
     if isinstance(shape, MeshShape):
-        # A mesh is not a BRep and has no edges or centres to speak of;
-        # its vertices are its ends, as Rhino's mesh vertex snap has it.
-        # Asking a mesh the BRep questions raised on every mouse move and
+        # A mesh is not a BRep and has no edges or centres to speak of.
+        # Asking it the BRep questions raised on every mouse move and
         # took picking and drawing down with it whenever a scan was open.
+        # Its vertices are a snap of their own kind, Vertex, as in Rhino,
+        # and off unless asked: a car body has tens of thousands, one
+        # under every pixel, and offered as ends they take every pick —
+        # a circle drawn beside such a mesh could not choose its own
+        # radius for jumping vertex to vertex.
         if len(shape.vertices) > MESH_SNAP_VERTEX_LIMIT:
             return []
-        return [((float(x), float(y), float(z)), "end")
+        return [((float(x), float(y), float(z)), "vertex")
                 for x, y, z in shape.vertices]
     out = []
     seen = set()

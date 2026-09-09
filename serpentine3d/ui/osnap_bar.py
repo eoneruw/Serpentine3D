@@ -10,6 +10,7 @@ from ..core.snaps import SNAP_TYPES
 _LABELS = {
     "end": "End", "mid": "Mid", "center": "Cen", "quad": "Quad",
     "int": "Int", "appint": "AppInt", "perp": "Perp", "near": "Near",
+    "vertex": "Vert",
 }
 _TIPS = {
     "end": "Snap to curve endpoints",
@@ -20,6 +21,8 @@ _TIPS = {
     "appint": "Snap where two curves cross on screen without meeting",
     "perp": "Snap perpendicular from the previous point",
     "near": "Snap to the nearest point on a curve",
+    "vertex": "Snap to mesh vertices (a scan has one under every pixel; "
+              "keep this off unless you want them)",
 }
 
 

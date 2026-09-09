@@ -375,6 +375,7 @@ class SettingsDialog(QDialog):
             "appint": "Apparent intersections (crossing on screen only)",
             "perp": "Perpendicular (from previous point)",
             "near": "Nearest point on curve",
+            "vertex": "Mesh vertices",
         }
         self.os_boxes = {}
         for t in SNAP_TYPES:
