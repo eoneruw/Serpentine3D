@@ -242,7 +242,13 @@ void main() {
         // shows as a jag in the stripes
         vec3 r = reflect(normalize(vPosView), n);
         float band = sin(40.0 * r.y);
-        float stripe = smoothstep(-0.06, 0.06, band);
+        // The edge of a stripe is one pixel wide wherever it is: fwidth
+        // is how much `band` changes across this pixel, so the ramp is
+        // sized to the screen, not to the stripe. A fixed ramp was a
+        // hard staircase where the stripes ran close and a soft blur
+        // where they ran wide.
+        float w = max(fwidth(band), 1e-4);
+        float stripe = smoothstep(-w, w, band);
         vec3 zebra = mix(vec3(0.06), vec3(0.95), stripe);
         frag = vec4(zebra * (0.55 + 0.45 * diff), uAlpha);
         return;
