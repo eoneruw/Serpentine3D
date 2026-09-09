@@ -1188,6 +1188,7 @@ class Viewport(QOpenGLWidget):
         self._paint_failed = False          # a frame threw; see paintGL
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAcceptDrops(True)         # an image file, to trace over
         scene.add_listener(self.update)
         selection.add_listener(self.update)
 
@@ -1884,6 +1885,47 @@ class Viewport(QOpenGLWidget):
         self._image_textures[path] = (tex, aspect)
         return self._image_textures[path]
 
+    def _draw_picture(self, obj, gpu, mvp, ghost: bool = False):
+        """Paint a picture object's image across its window."""
+        shape = obj.shape
+        tex, _ = self._texture_for(shape.path)
+        if not tex:
+            return
+        m = obj.material or {}
+        alpha = float(m.get("opacity", 1.0))
+
+        def quad_of(corners, uvs):
+            c = rebased(corners, gpu.anchor)
+            order = (0, 1, 2, 0, 2, 3)
+            return np.array([[*c[i], *uvs[i]] for i in order], np.float32)
+
+        self._use(self._tex_prog)
+        GL.glUniformMatrix4fv(self._uloc(self._tex_prog, "uMVP"), 1,
+                              GL.GL_TRUE, mvp)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
+        GL.glUniform1i(self._uloc(self._tex_prog, "uTex"), 0)
+        GL.glBindVertexArray(self._tex_vao)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, self._tex_vbo)
+        quads = []
+        if ghost:
+            quads.append((quad_of(shape.full_corners(),
+                                  np.array([[0, 0], [1, 0], [1, 1], [0, 1]],
+                                           np.float32)), alpha * 0.3))
+        quads.append((quad_of(shape.corners(),
+                              shape.uv_corners().astype(np.float32)), alpha))
+        GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)
+        GL.glPolygonOffset(1.0, 1.0)
+        for quad, a in quads:
+            GL.glUniform1f(self._uloc(self._tex_prog, "uAlpha"), a)
+            GL.glBufferData(GL.GL_ARRAY_BUFFER, quad.nbytes, quad,
+                            GL.GL_DYNAMIC_DRAW)
+            if a < 1.0:
+                GL.glDepthMask(False)
+            GL.glDrawArrays(GL.GL_TRIANGLES, 0, 6)
+            GL.glDepthMask(True)
+        GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
+
     def _draw_image_planes(self, mvp):
         planes = getattr(self.scene, "image_planes", [])
         if not planes:
@@ -2362,6 +2404,14 @@ class Viewport(QOpenGLWidget):
                 fill_alpha_obj = 0.18
             else:
                 fill_alpha_obj = fill_alpha
+            if obj.kind == "picture":
+                # the image across the window, not shaded triangles; the
+                # whole image ghosted behind it while its crop handles
+                # are up, so there is something to drag them out to
+                if fill_alpha_obj > 0:
+                    self._draw_picture(obj, gpu, omvp,
+                                       ghost=obj.id in self.cv_enabled)
+                fill_alpha_obj = 0.0
             if fill_alpha_obj > 0 and gpu.tri_count:
                 self._use(fill_prog)
                 self._set_mvp(fill_prog, omvp)
@@ -4144,6 +4194,62 @@ class Viewport(QOpenGLWidget):
 
     # ---------------------------------------------------------------- events
 
+    # ----------------------------------------------------------- dropping
+
+    @staticmethod
+    def _dropped_images(mime) -> list[str]:
+        from ..core.picture import is_image_path
+        if not mime.hasUrls():
+            return []
+        return [u.toLocalFile() for u in mime.urls()
+                if u.isLocalFile() and is_image_path(u.toLocalFile())]
+
+    def dragEnterEvent(self, ev):
+        if self.space == "model" and self._dropped_images(ev.mimeData()):
+            ev.acceptProposedAction()
+        else:
+            ev.ignore()
+
+    def dragMoveEvent(self, ev):
+        self.dragEnterEvent(ev)
+
+    def dropEvent(self, ev):
+        paths = self._dropped_images(ev.mimeData())
+        if self.space != "model" or not paths:
+            ev.ignore()
+            return
+        pos = ev.position()
+        added = [self.add_picture(p, pos.x(), pos.y()) for p in paths]
+        added = [a for a in added if a is not None]
+        if added:
+            self.selection.set([o.id for o in added])
+        ev.acceptProposedAction()
+
+    def add_picture(self, path: str, px: float, py: float):
+        """Put the image at `path` into the model under the pixel: on
+        this pane's construction plane, so a drop on Front stands it up
+        facing you and a drop on Top lays it flat; about a third of the
+        view wide, whole, to be cropped and scaled from there."""
+        from ..core.picture import image_size, picture_on_plane
+        size = image_size(path)
+        if size is None:
+            return None
+        centre = self.world_point_at(px, py)
+        if centre is None:
+            centre = tuple(float(c) for c in self.camera.target)
+        width = self._view_width_at_target() * 0.35
+        shape = picture_on_plane(path, self.cplane, centre, width, size)
+        self.window_checkpoint("add picture")
+        obj = self.scene.add(shape, name=shape.name_hint)
+        self.update()
+        return obj
+
+    def _view_width_at_target(self) -> float:
+        """How wide the world is across this pane at the camera's target."""
+        half_h = self.camera.distance * math.tan(
+            math.radians(self.camera.fov) / 2)
+        return 2.0 * half_h * self._aspect()
+
     def mouseDoubleClickEvent(self, ev):
         if (self.space != "model" and not self.point_mode
                 and ev.button() == Qt.MouseButton.LeftButton):
@@ -4295,6 +4401,13 @@ class Viewport(QOpenGLWidget):
                     return
                 fwd = (self.camera.target - self.camera.position)
                 fwd = fwd / max(np.linalg.norm(fwd), 1e-12)
+                held_obj = self.scene.get(obj_id)
+                if held_obj is not None and held_obj.kind == "picture":
+                    # a crop corner lives in the picture's plane, so that
+                    # is what it is dragged across, whatever the view
+                    n = held_obj.shape.normal()
+                    if abs(float(n @ fwd)) > 0.05:
+                        fwd = n
                 self._cv_drag = (obj_id, index, np.asarray(world), fwd)
                 self.cvEditBegan.emit()
                 return

@@ -45,6 +45,13 @@ def cmd_selpointcloud(ctx):
     yield from ()
 
 
+@command("selpicture", aliases=("selpictures", "selpic"), mutates=False)
+def cmd_selpicture(ctx):
+    """Select every picture (reference image) in the model."""
+    _select_kind(ctx, "picture", "picture(s)")
+    yield from ()
+
+
 @command("sellayer", mutates=False)
 def cmd_sellayer(ctx):
     name = yield TextReq("Layer name")
