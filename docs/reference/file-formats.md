@@ -14,7 +14,7 @@ format is chosen by extension.
 | `.3mf` |  | ✓ | 3D printing — modern container with real units, colour and multi-part; preferred by Bambu Studio / PrusaSlicer / Cura |
 | `.dxf` | ✓ | ✓ | Curves/meshes with layers; layout sheets export at paper scale |
 | `.svg` | ✓ | ✓ | Paths import as curves (béziers exact); layouts export as vector SVG |
-| `.glb` |  | ✓ | Binary glTF with materials (Unreal / Blender / web) |
+| `.glb` / `.gltf` | ✓ | ✓ | glTF 2.0 with materials (Unreal / Blender / web / asset stores); imports as meshes with node transforms baked in, metres converted to document units; exports `.glb` |
 | `.usda` / `.usd` |  | ✓ | USD for virtual-production pipelines |
 
 ## Notes
