@@ -260,3 +260,18 @@ def test_the_picture_is_painted_with_its_image(win, image):
     cr = img.pixelColor(int(right[0]), int(right[1]))
     assert cl.red() > cl.blue() + 80, "the red half is on the left"
     assert cr.blue() > cr.red() + 80, "the blue half is on the right"
+
+
+def test_the_gumballs_scale_box_works_on_a_picture_and_a_mesh():
+    """Scaling along one axis went through OCCT's GTransform, which has
+    no idea what a picture is; the gumball's scale box raised on every
+    mouse move. Meshes had the same hole."""
+    from serpentine3d.core.mesh import MeshShape
+    p = _pic()
+    q = g.scale_along_axis(p, (0, 0, 0), (1, 0, 0), 2.0)
+    assert isinstance(q, PictureShape)
+    assert np.allclose(q.u, (200, 0, 0)) and np.allclose(q.v, (0, 50, 0))
+    m = MeshShape(np.array([[0, 0, 0], [10, 0, 0], [0, 10, 0]], float),
+                  np.array([[0, 1, 2]], np.uint32))
+    r = g.scale_along_axis(m, (0, 0, 0), (0, 1, 0), 3.0)
+    assert np.allclose(r.vertices[2], (0, 30, 0))
