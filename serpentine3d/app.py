@@ -190,6 +190,19 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,
                            self._display_dock)
 
+        # What you can do to what you have picked, as buttons: the
+        # commands that suit the selection, and a search for the rest.
+        # On the left, where a toolbox sits, so the right edge stays the
+        # properties of the thing and the left edge what to do with it.
+        from .ui.actions_panel import ActionsPanel
+        self.actions_panel = ActionsPanel(self.scene, self.selection,
+                                          self.run_command)
+        self._actions_dock = QDockWidget("Actions", self)
+        self._actions_dock.setObjectName("actionsDock")
+        self._actions_dock.setWidget(self.actions_panel)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea,
+                           self._actions_dock)
+
         # The panels a field's Enter must stay in, and whose splitter the
         # user drags: see eventFilter.
         self._panel_docks = (self._prop_dock, self._layer_dock)
