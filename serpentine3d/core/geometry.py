@@ -3892,6 +3892,108 @@ def blend_surfaces(face_a, edge_a, face_b, edge_b,
     return result
 
 
+def _edge_samples(edge, n: int):
+    """n points along the edge, evenly by arc length, with unit tangents."""
+    import numpy as np
+    from OCP.GCPnts import GCPnts_UniformAbscissa
+    from OCP.gp import gp_Pnt, gp_Vec
+    ad = occ.edge_adaptor(occ.to_edge(edge))
+    ua = GCPnts_UniformAbscissa(ad, n)
+    params = ([ua.Parameter(i + 1) for i in range(ua.NbPoints())]
+              if ua.IsDone() and ua.NbPoints() >= 2 else
+              list(np.linspace(ad.FirstParameter(), ad.LastParameter(), n)))
+    pts, tans = [], []
+    for t in params:
+        p, d = gp_Pnt(), gp_Vec()
+        ad.D1(t, p, d)
+        pts.append(np.array([p.X(), p.Y(), p.Z()]))
+        v = np.array([d.X(), d.Y(), d.Z()])
+        tans.append(v / (np.linalg.norm(v) or 1.0))
+    return pts, tans
+
+
+def _cross_boundary_dirs(face, pts, tans, towards):
+    """At each point on the face's edge, the unit direction that leaves
+    the face across that edge: normal x edge tangent, turned to face
+    `towards` (the matching point on the far edge)."""
+    import numpy as np
+    from OCP.BRep import BRep_Tool
+    from OCP.GeomLProp import GeomLProp_SLProps
+    from OCP.ShapeAnalysis import ShapeAnalysis_Surface
+    f = occ.to_face(face)
+    surf = BRep_Tool.Surface_s(f)
+    props = GeomLProp_SLProps(surf, 1, 1e-6)
+    finder = ShapeAnalysis_Surface(surf)
+    out = []
+    for p, t, q in zip(pts, tans, towards):
+        uv = finder.ValueOfUV(_pnt(tuple(map(float, p))), 1e-6)
+        props.SetParameters(uv.X(), uv.Y())
+        if props.IsNormalDefined():
+            nv = props.Normal()
+            n = np.array([nv.X(), nv.Y(), nv.Z()])
+        else:
+            n = np.array([0.0, 0.0, 1.0])
+        c = np.cross(n, t)
+        if np.linalg.norm(c) < 1e-9:
+            c = q - p
+        c = c / (np.linalg.norm(c) or 1.0)
+        if np.dot(c, q - p) < 0:
+            c = -c
+        out.append(c)
+    return out
+
+
+def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
+                        continuity: str = "G1",
+                        sections: int = 24) -> TopoDS_Shape:
+    """A blend surface across the gap, with a bulge you can set.
+
+    Rhino's BlendSrf, the adjustable part: a cubic section leaves each
+    edge in the direction its surface is heading (tangent, G1), and
+    `bulge` scales how far the two handles reach before the section
+    turns for the other edge — 1 is the even S-curve, less pulls it
+    taut, more makes it belly out. `continuity` "G0" drops the handles
+    and the sections run straight across. Built as a loft through the
+    sections, so the surface leaves each edge as the sampled points do;
+    on a fair edge the difference is far below tolerance.
+    """
+    import math
+    import numpy as np
+    if bulge <= 0:
+        raise GeometryError("Bulge must be positive")
+    n = max(6, int(sections))
+    pa, ta = _edge_samples(edge_a, n)
+    pb, tb = _edge_samples(edge_b, n)
+    if (math.dist(pa[0], pb[0]) + math.dist(pa[-1], pb[-1])
+            > math.dist(pa[0], pb[-1]) + math.dist(pa[-1], pb[0])):
+        pb, tb = pb[::-1], [-t for t in tb[::-1]]
+    ca = _cross_boundary_dirs(face_a, pa, ta, pb)
+    cb = _cross_boundary_dirs(face_b, pb, tb, pa)
+    from OCP.Geom import Geom_BezierCurve
+    from OCP.TColgp import TColgp_Array1OfPnt
+    from OCP.gp import gp_Pnt
+    profiles = []
+    for p0, p3, d0, d3 in zip(pa, pb, ca, cb):
+        gap = np.linalg.norm(p3 - p0)
+        if gap < tol():
+            raise GeometryError("The two edges touch — nothing to blend "
+                                "across")
+        if continuity.upper() == "G0":
+            poles = [p0, p3]
+        else:
+            h = bulge * gap / 3.0
+            poles = [p0, p0 + d0 * h, p3 + d3 * h, p3]
+        arr = TColgp_Array1OfPnt(1, len(poles))
+        for i, q in enumerate(poles):
+            arr.SetValue(i + 1, gp_Pnt(*map(float, q)))
+        curve = Geom_BezierCurve(arr)
+        profiles.append(BRepBuilderAPI_MakeEdge(curve).Edge())
+    try:
+        return loft(profiles, ruled=(continuity.upper() == "G0"))
+    except GeometryError:
+        raise GeometryError("Blend failed between these edges")
+
+
 def blend_surfaces_somehow(face_a, edge_a, face_b, edge_b):
     """The best surface that will build across the gap, and what it is.
 
