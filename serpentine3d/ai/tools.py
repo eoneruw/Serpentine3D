@@ -44,10 +44,18 @@ TOOLS: list[dict] = [
     {
         "name": "screenshot",
         "description": (
-            "Capture the current 3D viewport as an image so you can see the "
-            "model. Use after building or changing geometry to visually "
-            "verify the result before declaring it done."),
-        "input_schema": _s(width={"type": "integer", "default": 1024}),
+            "Look at the model. Use after building or changing geometry to "
+            "visually verify the result before declaring it done. Pass "
+            "view (top/front/right/left/back/bottom/isometric/perspective), "
+            "display_mode (wireframe/shaded/ghosted/rendered) and/or "
+            "zoom_extents to choose the look: those render through a camera "
+            "of your own and leave the user's viewport exactly as it is. "
+            "With none of them you get what the user is looking at. "
+            "Prefer this over the viewport tool for looking."),
+        "input_schema": _s(width={"type": "integer", "default": 1024},
+                           view={"type": "string"},
+                           display_mode={"type": "string"},
+                           zoom_extents={"type": "boolean"}),
     },
     {
         "name": "create_curve",
@@ -165,10 +173,13 @@ TOOLS: list[dict] = [
     {
         "name": "viewport",
         "description": (
-            "Adjust the view. view: top/front/right/left/back/bottom/"
-            "isometric/perspective. "
+            "Change the user's viewport. view: top/front/right/left/back/"
+            "bottom/isometric/perspective. "
             "display_mode: wireframe/shaded/ghosted/rendered. "
-            "zoom_extents fits everything in view."),
+            "zoom_extents fits everything in view. This moves the view the "
+            "user is working in, so use it only when they ask for a view "
+            "change; to look at the model yourself, use screenshot with a "
+            "view instead."),
         "input_schema": _s(view={"type": "string"},
                            display_mode={"type": "string"},
                            zoom_extents={"type": "boolean"}),
@@ -187,7 +198,11 @@ def dispatch(api, name: str, args: dict) -> str | ImageResult:
     if name == "scene_info":
         return _j(api.scene_info())
     if name == "screenshot":
-        result = api.screenshot(width=int(args.get("width", 1024)))
+        result = api.screenshot(width=int(args.get("width", 1024)),
+                                view=args.get("view") or None,
+                                display_mode=args.get("display_mode") or None,
+                                zoom_extents=bool(args.get("zoom_extents",
+                                                           False)))
         with open(result["path"], "rb") as f:
             data = f.read()
         os.unlink(result["path"])
@@ -261,7 +276,10 @@ def summarize_call(name: str, args: dict) -> str:
         return f"{args.get('operation', '?')} " \
                f"{', '.join(args.get('targets', []))}"
     if name == "screenshot":
-        return "looking at the viewport"
+        parts = [args.get("view"), args.get("display_mode")]
+        parts = [p for p in parts if p]
+        return "looking (" + ", ".join(parts) + ")" if parts \
+            else "looking at the viewport"
     if name == "scene_info":
         return "reading the scene"
     if name == "viewport":

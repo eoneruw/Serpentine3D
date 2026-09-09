@@ -110,7 +110,14 @@ class SerpApi:
 
     def screenshot(self, path: str | None = None, width: int | None = None,
                    height: int | None = None,
-                   full_window: bool = False) -> dict:
+                   full_window: bool = False,
+                   view: str | None = None,
+                   display_mode: str | None = None,
+                   zoom_extents: bool = False) -> dict:
+        """A picture of the model. With none of `view`, `display_mode` or
+        `zoom_extents` it is what the user's viewport shows; with any of
+        them it is rendered through a camera of its own, offscreen, and
+        the user's viewport is not touched."""
         self._land_view_flights()
         if not path:
             fd, path = tempfile.mkstemp(suffix=".png", prefix="serp_")
@@ -119,6 +126,9 @@ class SerpApi:
             from PySide6.QtWidgets import QApplication
             target = QApplication.activeModalWidget() or self.window
             img = target.grab().toImage()
+        elif view or display_mode or zoom_extents:
+            img = self._render_aside(view, display_mode, zoom_extents,
+                                     width, height)
         else:
             img = self.viewport.grabFramebuffer()
         if width:
@@ -128,6 +138,41 @@ class SerpApi:
         if not img.save(path):
             raise ApiError(f"Could not save screenshot to {path}")
         return {"path": path, "width": img.width(), "height": img.height()}
+
+    def _render_aside(self, view, display_mode, zoom_extents, width, height):
+        """Render the model through a camera that is not the viewport's.
+
+        The assistant looks at the model a lot — after every build, from
+        whatever angle shows the problem — and it used to do that by
+        turning the user's own pane to isometric and leaving it there.
+        A look is not a move: it gets a copy of the pane's camera, turns
+        that, and draws offscreen at the pane's aspect. The pane never
+        finds out.
+        """
+        from .ui.camera import Camera
+        vp = self.viewport
+        cam = Camera()
+        cam.restore(vp.camera.state())
+        cam.scene_bounds = vp.camera.scene_bounds
+        if view:
+            try:
+                cam.set_standard_view(view)
+            except ValueError as exc:
+                raise ApiError(str(exc)) from exc
+        px_w = int(width or 1024)
+        px_h = int(height or round(px_w / max(vp.width(), 1)
+                                   * max(vp.height(), 1)))
+        if zoom_extents or view:
+            # a new direction needs a new distance: the old one framed the
+            # model from the old side
+            cam.zoom_extents(self.scene.bbox(), px_w / max(px_h, 1))
+        if display_mode and display_mode not in vp.DISPLAY_MODES:
+            raise ApiError(f"Unknown display mode '{display_mode}'")
+        img = vp.render_model_image(cam, px_w, px_h,
+                                    display_mode=display_mode)
+        if img is None:
+            raise ApiError("Could not render the model offscreen")
+        return img
 
     # -------------------------------------------------------------- commands
 

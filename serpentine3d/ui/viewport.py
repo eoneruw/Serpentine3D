@@ -3344,12 +3344,15 @@ class Viewport(QOpenGLWidget):
         img = self.grabFramebuffer()
         return img.save(path)
 
-    def render_model_image(self, camera, px_w: int, px_h: int):
+    def render_model_image(self, camera, px_w: int, px_h: int,
+                           display_mode: str | None = None):
         """Render the model through `camera` at any size, offscreen.
 
         The turntable and the replay renderer draw here: same shaders,
-        same theme, same display mode as the pane, at whatever resolution
-        the clip wants rather than whatever size the window happens to be.
+        same theme, same display mode as the pane (or `display_mode`, for
+        a caller that wants another look without changing the pane's), at
+        whatever resolution the clip wants rather than whatever size the
+        window happens to be.
         """
         from PySide6.QtOpenGL import QOpenGLFramebufferObject
         self.makeCurrent()
@@ -3378,7 +3381,7 @@ class Viewport(QOpenGLWidget):
             proj = camera.proj_matrix(px_w, px_h)
             view = camera.view_matrix()
             mvp64 = proj @ view
-            self._draw_objects(mvp64, view)
+            self._draw_objects(mvp64, view, mode_override=display_mode)
             img = fbo.toImage()
             fbo.release()
             ratio = self.devicePixelRatioF()
