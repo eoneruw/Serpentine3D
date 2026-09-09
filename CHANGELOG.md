@@ -347,6 +347,16 @@
   an extra viewport updates the live line and its next pick. The snap bar,
   settings and `osnap` command now use the same state in every pane.
 
+### Fixed
+
+- **BlendSrf asks for its edges, and always makes something.** Run with
+  nothing picked it printed an instruction and ended; with two edges
+  that would not take a tangent blend it raised. Both looked like a
+  command doing nothing. Now it prompts for the two edges when it has
+  to, and steps down from G1 to a G0 blend to a ruled surface, saying
+  which it made.
+
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed

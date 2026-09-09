@@ -274,7 +274,7 @@ Commands that need a file open a filtered chooser by default. Append
 | Command | Does |
 |---|---|
 | `blendcrv` (`blend`) | Blendcrv |
-| `blendsrf` | G1 blend surface between two Ctrl+Shift-picked surface edges. |
+| `blendsrf` | Blend surface across the gap between two surface edges; asks for the edges if none are picked. |
 | `dupborder` | Dupborder |
 | `dupedge` | Duplicate Ctrl+Shift-picked edges as curves. |
 | `dupfaceborder` | Duplicate the border wires of Ctrl+Shift-picked faces as curves. |
