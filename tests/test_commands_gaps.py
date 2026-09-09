@@ -522,6 +522,8 @@ def test_blendsrf_command(env):
     sel.subobjects.append((s1.id, "edge", edge_idx(s1, 0.0)))
     sel.subobjects.append((s2.id, "edge", edge_idx(s2, 8.0)))
     proc.run("blendsrf")
-    assert not proc.busy
     srfs = [o for o in scene.all() if o.kind == "surface"]
-    assert len(srfs) == 3
+    assert len(srfs) == 3, "the blend is on screen at once"
+    assert proc.busy, "open for a bulge"
+    proc.provide_text("")               # Enter keeps it
+    assert not proc.busy
