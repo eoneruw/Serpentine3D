@@ -267,6 +267,13 @@ class MainWindow(QMainWindow):
         from .ui.spacemouse import SpaceMouseNavigator
         self.spacemouse = SpaceMouseNavigator(self)
 
+        # The selection filter where Rhino keeps it: along the bottom,
+        # a button per kind, so it can be seen and clicked, not just typed.
+        from .ui.selection_filter import SelectionFilterBar
+        self.filter_bar = SelectionFilterBar(self.selection,
+                                             on_change=self._update_status)
+        self.statusBar().addPermanentWidget(self.filter_bar)
+
         self._update_status()
         self.command_line.echo("Serpentine3D — type a command to begin "
                                "(line, circle, box, extrude, loft, ...)")
@@ -850,6 +857,19 @@ class MainWindow(QMainWindow):
                      lambda: self.run_command("selnone"))
         self._action(m_edit, "Invert Selection", None,
                      lambda: self.run_command("invert"))
+        # The sel* commands, for people who would rather click than type.
+        m_sel = m_edit.addMenu("Select by Type")
+        for label, cmd in (("Points", "selpt"), ("Curves", "selcrv"),
+                           ("Surfaces", "selsrf"), ("Solids", "selsolid"),
+                           ("Meshes", "selmesh"),
+                           ("Point Clouds", "selpointcloud")):
+            self._action(m_sel, label, None,
+                         lambda c=cmd: self.run_command(c))
+        m_sel.addSeparator()
+        self._action(m_sel, "Same Layer as Selection", None,
+                     lambda: self.run_command("sellayer"))
+        self._action(m_sel, "Previous Selection", None,
+                     lambda: self.run_command("selprev"))
         m_edit.addSeparator()
         self._action(m_edit, "Control Points On", "F10",
                      lambda: self.run_command("pointson"))
@@ -2170,6 +2190,9 @@ class MainWindow(QMainWindow):
         if self.selection.filter_active and self.selection.filter_kinds:
             filt = ("  ·  filter: "
                     + ", ".join(sorted(self.selection.filter_kinds)))
+        bar = getattr(self, "filter_bar", None)
+        if bar is not None:
+            bar.sync()
         self.statusBar().showMessage(
             f"{n} object(s)  ·  {sel} selected  ·  layer: {layer}  ·  "
             f"{mode}  ·  units: {self.scene.units}{filt}")
