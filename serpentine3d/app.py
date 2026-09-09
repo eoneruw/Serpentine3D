@@ -10,7 +10,8 @@ import numpy as np
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QDockWidget, QFileDialog, QInputDialog, QMainWindow,
+    QApplication, QDockWidget, QFileDialog, QHBoxLayout, QInputDialog,
+    QMainWindow,
     QMenu, QMessageBox, QProgressDialog, QTabBar, QToolBar, QVBoxLayout,
     QWidget,
 )
@@ -152,7 +153,19 @@ class MainWindow(QMainWindow):
         cmd_layout.setSpacing(0)
         cmd_layout.addWidget(self._build_space_tab_row())   # tabs + "＋"
         cmd_layout.addWidget(self.command_line, 1)   # the history takes it
-        cmd_layout.addWidget(self.osnap_bar)
+        # The selection filter beside the object snaps: the two strips
+        # along the bottom are both about what a click may land on, and
+        # the Osnap row is where Rhino keeps its filter too.
+        from .ui.selection_filter import SelectionFilterBar
+        self.filter_bar = SelectionFilterBar(self.selection,
+                                             on_change=self._update_status)
+        strip = QWidget()
+        strip_layout = QHBoxLayout(strip)
+        strip_layout.setContentsMargins(0, 0, 8, 0)
+        strip_layout.setSpacing(0)
+        strip_layout.addWidget(self.osnap_bar, 1)
+        strip_layout.addWidget(self.filter_bar)
+        cmd_layout.addWidget(strip)
         self._cmd_dock = QDockWidget("Command", self)
         self._cmd_dock.setObjectName("commandDock")
         self._cmd_dock.setWidget(cmd_container)
@@ -266,13 +279,6 @@ class MainWindow(QMainWindow):
 
         from .ui.spacemouse import SpaceMouseNavigator
         self.spacemouse = SpaceMouseNavigator(self)
-
-        # The selection filter where Rhino keeps it: along the bottom,
-        # a button per kind, so it can be seen and clicked, not just typed.
-        from .ui.selection_filter import SelectionFilterBar
-        self.filter_bar = SelectionFilterBar(self.selection,
-                                             on_change=self._update_status)
-        self.statusBar().addPermanentWidget(self.filter_bar)
 
         self._update_status()
         self.command_line.echo("Serpentine3D — type a command to begin "
