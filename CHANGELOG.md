@@ -17,6 +17,16 @@
   input line with the gold ghost following; Enter takes it. Nothing
   per command, so it is there for all of them.
 
+### Fixed
+
+- **BlendSrf asks for its edges, and always makes something.** Run with
+  nothing picked it printed an instruction and ended; with two edges
+  that would not take a tangent blend it raised. Both looked like a
+  command doing nothing. Now it prompts for the two edges when it has
+  to, and steps down from G1 to a G0 blend to a ruled surface, saying
+  which it made.
+
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
