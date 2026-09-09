@@ -12,6 +12,16 @@
   as it happens, so a command can rebuild what it is making while you
   look at it, and the history is told once, when you let go.
 
+### Fixed
+
+- **BlendSrf asks for its edges, and always makes something.** Run with
+  nothing picked it printed an instruction and ended; with two edges
+  that would not take a tangent blend it raised. Both looked like a
+  command doing nothing. Now it prompts for the two edges when it has
+  to, and steps down from G1 to a G0 blend to a ruled surface, saying
+  which it made.
+
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
