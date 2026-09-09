@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **A row of control points comes off a surface.** `removeknot` takes
+  surfaces now, with a Direction (U row, V column, Both) and the
+  surface ghosted as it will be; and Delete on held surface control
+  points takes out the row or column they sit on, since a surface's
+  points come in rows and one cannot go alone. Both say how far the
+  surface moved. Delete used to answer "Not a curve" and do nothing.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
