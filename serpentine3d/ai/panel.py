@@ -22,6 +22,10 @@ _USER_STYLE = ("background: #2b3b4d; color: #e8e9ea; padding: 6px 10px;"
                "border-radius: 6px;")
 _ERR_STYLE = "color: #d9705f;"
 _STATUS_STYLE = "color: #85868a; font-size: 11px; font-style: italic;"
+# How far above the end of the feed still counts as "reading the end":
+# a couple of lines, so a reader who has drifted a hair does not lose
+# the feed, and one who has scrolled up to re-read something keeps it.
+_FOLLOW_SLACK_PX = 24
 _HINT = ("Try: “a spiral staircase, 3 m tall, 14 steps” · “fillet every "
          "edge of the box 2 mm” · “what's in this scene?”")
 
@@ -80,6 +84,14 @@ class AiPanel(QWidget):
         root.addLayout(header)
 
         self.scroll = QScrollArea()
+        # The feed follows the model's output only while you are reading
+        # the end of it. Scroll up to re-read something and it stays put;
+        # scroll back to the bottom and it follows again. Sending a
+        # message always jumps to the end (see _scroll_down(force=True)).
+        self._following = True
+        bar = self.scroll.verticalScrollBar()
+        bar.valueChanged.connect(self._note_scroll)
+        bar.rangeChanged.connect(self._follow_growth)
         self.scroll.setWidgetResizable(True)
         self.scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         self.feed_host = QWidget()
@@ -321,7 +333,7 @@ class AiPanel(QWidget):
         host = QWidget()
         host.setLayout(row)
         self.feed.insertWidget(self.feed.count() - 1, host)
-        self._scroll_down()
+        self._scroll_down(force=True)
 
     def _add_label(self, text: str, wrap: bool = False) -> QLabel:
         lbl = QLabel(text)
@@ -333,6 +345,26 @@ class AiPanel(QWidget):
         self.feed.insertWidget(self.feed.count() - 1, lbl)
         return lbl
 
-    def _scroll_down(self):
+    # ------------------------------------------------------------ scrolling
+
+    def _note_scroll(self, value: int):
+        """Where the reader is: at the end (follow new output) or not."""
+        bar = self.scroll.verticalScrollBar()
+        self._following = value >= bar.maximum() - _FOLLOW_SLACK_PX
+
+    def _follow_growth(self, _lo: int, hi: int):
+        """The feed grew: keep the end in view, but only for a reader who
+        was already there."""
+        if self._following:
+            self.scroll.verticalScrollBar().setValue(hi)
+
+    def _scroll_down(self, force: bool = False):
+        """Show the end of the feed. `force` is for the user's own
+        message: they just sent it, they want to see it, wherever they
+        had scrolled to before. Everything else respects _following."""
+        if force:
+            self._following = True
+        if not self._following:
+            return
         QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(
             self.scroll.verticalScrollBar().maximum()))
