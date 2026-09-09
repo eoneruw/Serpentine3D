@@ -401,15 +401,30 @@ class Camera:
         fwd = normalize(self.target - self.position)
         right, up = self.right_up()
         if self.projection == "parallel":
-            # parallel rays: shared direction, origin spread over the view plane
+            # parallel rays: shared direction, origin spread over the view
+            # plane — and started on the near plane rather than at the eye,
+            # for the reason project() measures depth from there: what is
+            # drawn between the two must be ahead of the ray, or a drag
+            # plane through it is "behind the origin" and never hit.
             half_h = self.distance * math.tan(math.radians(self.fov) / 2)
             origin = (self.position + right * (x_ndc * half_h * aspect)
-                      + up * (y_ndc * half_h))
+                      + up * (y_ndc * half_h) + fwd * self._parallel_near())
             return origin, fwd
         tan_f = math.tan(math.radians(self.fov) / 2)
         direction = normalize(
             fwd + right * (x_ndc * tan_f * aspect) + up * (y_ndc * tan_f))
         return self.position.copy(), direction
+
+    def _parallel_near(self) -> float:
+        """Where a parallel view's drawing starts, along the view direction
+        from the eye: the near plane when a scene has been described, and
+        the eye itself when not. The fallback near plane (clip_planes with
+        no bounds) is thousands of units behind the eye, and a ray begun
+        there in a Top view that is 0.1 degrees off vertical (which it is:
+        STANDARD_VIEWS) would start metres away from the pixel's target."""
+        if self.scene_bounds is None or self.projection != "parallel":
+            return 0.0
+        return float(self.clip_planes()[0])
 
     def _view_proj(self, width: int, height: int) -> tuple:
         """Cached (view-projection, position, forward) for the current pose.
@@ -458,8 +473,15 @@ class Camera:
         out[:, 1] = (1 - ndc[:, 1]) * 0.5 * height
         if self.projection == "parallel":
             # w is a constant 1 in parallel projection, so the "in front of
-            # camera" sign must come from the forward distance instead
-            out[:, 2] = (np.asarray(points, float) - pos) @ fwd
+            # camera" sign must come from the forward distance instead —
+            # measured from the near plane, not the eye. A parallel view's
+            # near plane sits behind the eye (clip_planes), so a point
+            # between the two is drawn, and a picker that treats its depth
+            # as "behind the camera" refuses a point you can see. Zoom in
+            # on a detail in Right and the nearer half of the model was
+            # exactly that: visible, and nothing would pick it.
+            out[:, 2] = ((np.asarray(points, float) - pos) @ fwd
+                         - self._parallel_near())
         else:
             out[:, 2] = w[:, 0]
         return out
