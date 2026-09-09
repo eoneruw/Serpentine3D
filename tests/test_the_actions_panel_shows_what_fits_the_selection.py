@@ -37,9 +37,10 @@ def test_every_command_the_table_names_exists_or_is_skipped_quietly():
     from serpentine3d.commands.base import resolve
     named = {name for groups in (ap.NOTHING, ap.CURVES, ap.SURFACES,
                                  ap.SOLIDS, ap.MESHES, ap.POINTCLOUDS,
-                                 ap.PICTURES, ap.ANY)
+                                 ap.PICTURES, ap.ANY, ap.EDGES, ap.FACES)
              for _, items in groups for name, _ in items}
-    missing = sorted(n for n in named if resolve(n) is None)
+    named |= {name for _, _, items in ap.TOGETHER for name, _ in items}
+    missing = sorted(n for n in named if resolve(n.split()[0]) is None)
     # a name the build does not have is skipped when drawn, but the
     # table should not drift far from what exists
     assert len(missing) <= 2, missing
@@ -101,3 +102,46 @@ def test_search_finds_by_name_or_by_what_it_does(win):
 
 def test_the_panel_is_docked_and_named_for_layout_saving(win):
     assert win._actions_dock.objectName() == "actionsDock"
+
+
+# --------------------------------------------- picked edges, and pairs
+
+def test_picked_edges_bring_their_own_commands(win):
+    o = win.scene.add(g.make_box((0, 0, 0), 10, 10, 10), name="B")
+    win.selection.set_subobjects([(o.id, "edge", 0)])
+    shown = win.actions_panel.visible_commands()
+    assert "blendsrf" in shown and "dupedge" in shown
+    assert "filletedge" in shown
+    assert "line" not in shown, "not the nothing-picked list"
+    win.selection.set_subobjects([(o.id, "face", 0)])
+    shown = win.actions_panel.visible_commands()
+    assert "extractsrf" in shown and "pushpull" in shown
+    assert "blendsrf" not in shown
+
+
+def test_a_solid_and_a_surface_together_offer_a_cut(win):
+    box = win.scene.add(g.make_box((0, 0, 0), 10, 10, 10), name="B")
+    srf = win.scene.add(g.loft([g.make_line((-5, -5, 5), (15, -5, 5)),
+                                g.make_line((-5, 15, 5), (15, 15, 5))]),
+                        name="S")
+    win.selection.set([box.id, srf.id])
+    shown = win.actions_panel.visible_commands()
+    assert "booleansplit" in shown and "trim" in shown
+    titles = [t for t, _ in ap.groups_for({"solid", "surface"})]
+    assert titles[0] == "Solid & surface", "the pair's group comes first"
+
+
+def test_two_curves_offer_a_loft_where_one_does_not():
+    one = [t for t, _ in ap.groups_for({"curve"}, counts={"curve": 1})]
+    two = [t for t, _ in ap.groups_for({"curve"}, counts={"curve": 2})]
+    assert "Curves" not in one and "Curves" in two
+
+
+def test_insert_column_is_the_same_command_with_its_direction_answered(win):
+    srf = win.scene.add(g.loft([g.make_line((0, 0, 0), (10, 0, 0)),
+                                g.make_line((0, 10, 0), (10, 10, 0))]),
+                        name="S")
+    win.selection.set([srf.id])
+    shown = win.actions_panel.visible_commands()
+    assert "insertknot" in shown and "insertknot Direction V" in shown
+    assert ap.describe("insertknot Direction V").startswith("insertknot:")
