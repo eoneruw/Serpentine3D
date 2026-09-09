@@ -76,6 +76,12 @@
 
 ### Added
 
+- **A row of control points comes off a surface.** `removeknot` takes
+  surfaces now, with a Direction (U row, V column, Both) and the
+  surface ghosted as it will be; and Delete on held surface control
+  points takes out the row or column they sit on, since a surface's
+  points come in rows and one cannot go alone. Both say how far the
+  surface moved. Delete used to answer "Not a curve" and do nothing.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
