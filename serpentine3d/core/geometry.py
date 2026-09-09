@@ -2261,6 +2261,79 @@ def insert_knots_at_spans(shape) -> TopoDS_Shape:
     return _curve_from_splines(splines)
 
 
+def _surface_uv_at(bs, point) -> tuple[float, float]:
+    from OCP.ShapeAnalysis import ShapeAnalysis_Surface
+    uv = ShapeAnalysis_Surface(bs).ValueOfUV(_pnt(point), 1e-6)
+    return float(uv.X()), float(uv.Y())
+
+
+def insert_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
+    """A copy of the surface with a knot row added through `point`.
+
+    The surface does not move: this is the surface's version of
+    insert_knot, and the one way to get a row of handles where you want
+    to pull from. `direction` is "u", "v" or "both": a u knot adds a row
+    of control points running across the surface at the picked u — the
+    line the row follows is the surface's V isocurve there — and v the
+    other way. Like move_surface_control_point, a trimmed face comes
+    back at its natural bounds.
+    """
+    bs, _face = _face_bspline_surface(shape)
+    u, v = _surface_uv_at(bs, point)
+    u0, u1, v0, v1 = bs.Bounds()
+    want = direction.lower()
+    if want not in ("u", "v", "both"):
+        raise GeometryError("direction is u, v or both")
+    eps_u = max(abs(u1 - u0), 1.0) * 1e-6
+    eps_v = max(abs(v1 - v0), 1.0) * 1e-6
+    try:
+        if want in ("u", "both"):
+            if min(abs(u - u0), abs(u - u1)) < eps_u:
+                raise GeometryError("That is the edge of the surface — pick "
+                                    "a point on it")
+            bs.InsertUKnot(u, 1, tol() * 0.01)
+        if want in ("v", "both"):
+            if min(abs(v - v0), abs(v - v1)) < eps_v:
+                raise GeometryError("That is the edge of the surface — pick "
+                                    "a point on it")
+            bs.InsertVKnot(v, 1, tol() * 0.01)
+    except GeometryError:
+        raise
+    except Exception as exc:                                   # noqa: BLE001
+        raise GeometryError(f"Could not add a knot there: {exc}") from exc
+    mk = BRepBuilderAPI_MakeFace(bs, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    return mk.Face()
+
+
+def insert_surface_knots_at_spans(shape) -> TopoDS_Shape:
+    """A knot in the middle of every span, both ways: Automatic for a
+    surface. Roughly four times the handles, and the surface unmoved."""
+    bs, _face = _face_bspline_surface(shape)
+    for getter, count, insert in ((bs.UKnot, bs.NbUKnots(), bs.InsertUKnot),
+                                  (bs.VKnot, bs.NbVKnots(), bs.InsertVKnot)):
+        knots = [getter(i) for i in range(1, count + 1)]
+        for a, b in zip(knots[:-1], knots[1:]):
+            insert((a + b) / 2.0, 1, tol() * 0.01)
+    mk = BRepBuilderAPI_MakeFace(bs, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    return mk.Face()
+
+
+def surface_iso_lines_at(shape, point, direction: str = "u") -> list:
+    """The isocurve(s) a knot row inserted at `point` would follow, as
+    polylines to ghost: for "u" the V isocurve through the point, for
+    "v" the U isocurve, for "both" the pair."""
+    out = []
+    if direction.lower() in ("u", "both"):
+        out.append(iso_curve(shape, point, along="v"))
+    if direction.lower() in ("v", "both"):
+        out.append(iso_curve(shape, point, along="u"))
+    return out
+
+
 def remove_knot(shape, point) -> TopoDS_Shape:
     """A copy of the curve with the knot nearest `point` taken out.
 

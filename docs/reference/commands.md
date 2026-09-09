@@ -159,7 +159,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `fillet` | Fillet |
 | `flip` | Turn curves round and surfaces inside out, as Rhino's Flip does. |
 | `hide` | Hide |
-| `insertknot` (`insertcontrolpoint`) | Add a control point to a curve without moving the curve. |
+| `insertknot` (`insertcontrolpoint`) | Add a control point to a curve or a row of them to a surface. |
 | `join` (`j`) | Join |
 | `layer` | Layer |
 | `material` (`mat`) | Assign a look (metallic/roughness/opacity) for rendered display |
