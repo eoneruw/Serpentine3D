@@ -145,7 +145,7 @@ def _face_mesh(face) -> tuple | None:
                      == TopAbs_Orientation.TopAbs_REVERSED)
     if reversed_face:
         idx = idx[:, ::-1].copy()
-    normals = _smooth_normals(verts, idx)
+    normals = _surface_normals(face, tri, n, verts, idx)
     # the per-vertex curvature loop is pure Python (~17% of tessellation)
     # and only the curvature display mode reads it — skip unless latched
     if _CURVATURE:
@@ -186,6 +186,43 @@ def _vertex_curvature(face, tri, n: int, reversed_face: bool) -> np.ndarray:
     except Exception:
         pass
     return curv
+
+
+def _surface_normals(face, tri, n: int, verts: np.ndarray,
+                     tris: np.ndarray) -> np.ndarray:
+    """The surface's own normal at each triangulation vertex.
+
+    Averaging the triangles around a vertex is what a mesh with no
+    surface behind it has to do, and it is what this did for every face,
+    surface or not. It shows: a vertex on a sphere's seam averages only
+    the triangles on its side, so the two sides shade differently and a
+    zebra stripe breaks where it crosses; a coarse mesh of a smooth
+    surface shades as coarse; a pole averages a fan into something 60
+    degrees off. The surface knows its normal at every UV node, so ask it,
+    and fall back to averaging only where it has no answer (a degenerate
+    pole, a face with no UV nodes).
+    """
+    if not tri.HasUVNodes():
+        return _smooth_normals(verts, tris)
+    try:
+        from OCP.BRepGProp import BRepGProp_Face
+        from OCP.gp import gp_Pnt, gp_Vec
+        gf = BRepGProp_Face(face)          # minds the face's orientation
+        p, v = gp_Pnt(), gp_Vec()
+        out = np.empty((n, 3), np.float64)
+        for i in range(1, n + 1):
+            uv = tri.UVNode(i)
+            gf.Normal(uv.X(), uv.Y(), p, v)
+            out[i - 1] = (v.X(), v.Y(), v.Z())
+    except Exception:                                    # noqa: BLE001
+        return _smooth_normals(verts, tris)
+    lens = np.linalg.norm(out, axis=1, keepdims=True)
+    undefined = lens[:, 0] < 1e-9
+    if undefined.any():
+        out[undefined] = _smooth_normals(verts, tris)[undefined]
+        lens = np.linalg.norm(out, axis=1, keepdims=True)
+        lens[lens < 1e-12] = 1.0
+    return (out / lens).astype(np.float32)
 
 
 def _smooth_normals(verts: np.ndarray, tris: np.ndarray) -> np.ndarray:
