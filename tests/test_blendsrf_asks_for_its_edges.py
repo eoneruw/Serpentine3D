@@ -56,9 +56,10 @@ def test_with_edges_picked_first_it_just_builds(win):
     win.selection.set_subobjects([(a.id, "edge", _edge_at_y(a, 0)),
                                   (b.id, "edge", _edge_at_y(b, 30))])
     win.processor.run("blendsrf")
-    assert not win.processor.busy
     made = [o for o in win.scene.all() if o.id not in (a.id, b.id)]
     assert len(made) == 1 and made[0].kind == "surface"
+    win.processor.provide_text("")          # Enter keeps the bulge as is
+    assert not win.processor.busy
     assert win.selection.ids == [made[0].id], "left holding what it made"
     lo, hi = g.bbox(made[0].shape)
     # a tangent blend bulges a little past its edges; it spans the gap
@@ -73,10 +74,11 @@ def test_with_nothing_picked_it_asks_and_waits(win):
     # the picks arrive around the prompt, the way the viewport sends them
     win.selection.toggle_subobject(a.id, "edge", _edge_at_y(a, 0))
     win.selection.toggle_subobject(b.id, "edge", _edge_at_y(b, 30))
-    win.processor.provide_text("")          # Enter
-    assert not win.processor.busy
+    win.processor.provide_text("")          # Enter: the edges are picked
     made = [o for o in win.scene.all() if o.id not in (a.id, b.id)]
-    assert len(made) == 1
+    assert len(made) == 1, "the blend is there to look at"
+    win.processor.provide_text("")          # Enter again keeps it
+    assert not win.processor.busy
 
 
 def test_a_selected_surface_does_not_stand_in_for_the_edges(win):
@@ -105,3 +107,93 @@ def test_edges_that_refuse_a_tangent_blend_still_get_a_surface():
                                           g.faces_of(b)[0], eb)
     assert not shape.IsNull()
     assert how == "G1" or "G0" in how or "ruled" in how
+
+
+# ------------------------------------------------------------- the bulge
+
+def test_the_blend_appears_at_once_and_a_typed_bulge_reshapes_it(win):
+    a, b = _two_surfaces_with_a_gap(win.scene)
+    win.selection.set_subobjects([(a.id, "edge", _edge_at_y(a, 0)),
+                                  (b.id, "edge", _edge_at_y(b, 30))])
+    win.processor.run("blendsrf")
+    assert win.processor.busy, "the blend is on screen, the bulge is open"
+    made = [o for o in win.scene.all() if o.id not in (a.id, b.id)]
+    assert len(made) == 1
+    even = g.bbox(made[0].shape)
+    assert "Bulge=1" in win.processor.prompt_text()
+    ghost = win.processor.preview_shape("2")
+    assert ghost is not None, "a typed bulge ghosts before it lands"
+    win.processor.provide_text("2")
+    assert win.processor.busy, "still open for another number"
+    fat = g.bbox(win.scene.get(made[0].id).shape)
+    assert fat[1][2] > even[1][2] + 1, "more bulge, more belly"
+    win.processor.provide_text("0.3")
+    taut = g.bbox(win.scene.get(made[0].id).shape)
+    assert taut[1][2] < even[1][2]
+    win.processor.provide_text("")          # Enter keeps it
+    assert not win.processor.busy
+    assert win.selection.ids == [made[0].id]
+    win.processor.run("undo")
+    assert len(win.scene.all()) == 2, "one undo takes the whole blend"
+
+
+def test_position_continuity_runs_straight_across(win):
+    a, b = _two_surfaces_with_a_gap(win.scene)
+    win.selection.set_subobjects([(a.id, "edge", _edge_at_y(a, 0)),
+                                  (b.id, "edge", _edge_at_y(b, 30))])
+    win.processor.run("blendsrf")
+    made = [o for o in win.scene.all() if o.id not in (a.id, b.id)][0]
+    win.processor.provide_text("Continuity")
+    win.processor.provide_text("Position")
+    lo, hi = g.bbox(win.scene.get(made.id).shape)
+    assert lo[2] > -0.01 and hi[2] < 5.01, "no belly: straight between"
+    win.processor.provide_text("")
+    assert not win.processor.busy
+
+
+def test_the_bulge_is_a_geometry_call_too():
+    a = g.loft([g.make_line((0, -50, 0), (100, -50, 10)),
+                g.make_line((0, 0, 0), (100, 0, 0))])
+    b = g.loft([g.make_line((0, 30, 5), (100, 30, 5)),
+                g.make_line((0, 80, 0), (100, 80, -10))])
+    fake = lambda sh: type("O", (), {"shape": sh, "name": "x"})  # noqa: E731
+    ea = g.edges_of(a)[_edge_at_y(fake(a), 0)]
+    eb = g.edges_of(b)[_edge_at_y(fake(b), 30)]
+    fa, fb = g.faces_of(a)[0], g.faces_of(b)[0]
+    thin = g.blend_between_edges(fa, ea, fb, eb, bulge=0.3)
+    fat = g.blend_between_edges(fa, ea, fb, eb, bulge=2.0)
+    assert g.bbox(fat)[1][2] > g.bbox(thin)[1][2]
+    with pytest.raises(g.GeometryError):
+        g.blend_between_edges(fa, ea, fb, eb, bulge=0)
+
+
+def test_escape_takes_the_blend_away_again(win):
+    a, b = _two_surfaces_with_a_gap(win.scene)
+    win.selection.set_subobjects([(a.id, "edge", _edge_at_y(a, 0)),
+                                  (b.id, "edge", _edge_at_y(b, 30))])
+    win.processor.run("blendsrf")
+    assert len(win.scene.all()) == 3
+    win.processor.cancel()
+    assert len(win.scene.all()) == 2, "cancelled means no blend"
+
+
+def test_an_edge_of_a_mesh_is_named_as_the_reason(win):
+    """Two edges picked, one of them on a mesh: it said "1 picked" and
+    nothing else, and two edges were plainly lit. Now it says which
+    pick it could not use, and why."""
+    from serpentine3d.core.mesh import MeshShape
+    import numpy as np
+    a, _b = _two_surfaces_with_a_gap(win.scene)
+    m = win.scene.add(MeshShape(
+        np.array([[0, 40, 0], [100, 40, 0], [0, 90, 0]], float),
+        np.array([[0, 1, 2]], np.uint32)), name="Scan")
+    said = []
+    win.processor.ctx.add_echo_listener(said.append)
+    win.selection.set_subobjects([(a.id, "edge", _edge_at_y(a, 0)),
+                                  (m.id, "edge", 0)])
+    win.processor.run("blendsrf")
+    assert "Scan is a mesh" in "\n".join(said), "said before it asks"
+    assert win.processor.busy, "and asks for the edge it still needs"
+    win.processor.provide_text("")
+    assert not win.processor.busy
+    assert "1 usable of 2 picked" in "\n".join(said)
