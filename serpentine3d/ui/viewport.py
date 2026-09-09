@@ -3173,10 +3173,17 @@ class Viewport(QOpenGLWidget):
 
     # -- what the mode draws, and what the user says instead --
 
-    #: Modes that leave surface isocurves off unless asked. Only rendered:
-    #: a render showing the wire cage of every surface is not a render, and
-    #: it is what GitHub #5 was looking at.
-    _ISO_OFF_MODES = ("rendered",)
+    #: Modes that leave surface isocurves off unless asked. Rendered,
+    #: because a render showing the wire cage of every surface is not a
+    #: render (GitHub #5); and the analysis modes, because what they show
+    #: is read off the surface itself — a stripe that bends, a colour that
+    #: changes — and lines drawn over that read as breaks in it.
+    _ANALYSIS_MODES = ("zebra", "draft", "curvature")
+    _ISO_OFF_MODES = ("rendered",) + _ANALYSIS_MODES
+    #: Modes that leave surface edges off unless asked: the analysis
+    #: modes again, for the same reason. A seam edge down a cylinder
+    #: looked like a crease in the stripes; it is not one.
+    _EDGE_OFF_MODES = _ANALYSIS_MODES
 
     def shows_isocurves(self, mode: str | None = None) -> bool:
         """Whether surface isocurves are drawn in this pane.
@@ -3190,9 +3197,12 @@ class Viewport(QOpenGLWidget):
         return (mode or self.display_mode) not in self._ISO_OFF_MODES
 
     def shows_edges(self, mode: str | None = None) -> bool:
-        """Whether surface and mesh edges are drawn in this pane. Every mode
-        wants them; the override is there for the odd render that doesn't."""
-        return True if self._edge_override is None else self._edge_override
+        """Whether surface and mesh edges are drawn in this pane: every
+        mode but the analysis ones wants them, and the override (the
+        display panel's Edges switch) has the last word either way."""
+        if self._edge_override is not None:
+            return self._edge_override
+        return (mode or self.display_mode) not in self._EDGE_OFF_MODES
 
     def set_isocurves(self, on: bool | None):
         """True or False to overrule the mode, None to follow it again."""
