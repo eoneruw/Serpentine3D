@@ -36,7 +36,9 @@ class OsnapBar(QWidget):
         title.setStyleSheet("color: #85868a; font-size: 11px;")
         layout.addWidget(title)
 
-        self._master = self._button("On", "Master object-snap toggle")
+        self._master = self._button(
+            "On", "Master object-snap toggle (hold Alt to skip the snaps "
+            "for one pick or drag)")
         self._master.setChecked(viewport.snaps.enabled)
         self._master.toggled.connect(self._master_toggled)
         layout.addWidget(self._master)
