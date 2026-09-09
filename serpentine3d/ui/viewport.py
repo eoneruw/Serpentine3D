@@ -2799,7 +2799,8 @@ class Viewport(QOpenGLWidget):
         if self.space != "model" and self._drawing_through() is not None:
             pts = self._on_paper(pts) if len(pts) else pts
             markers = [self._on_paper([m])[0] for m in markers]
-        snap = self._active_snap if self.point_mode else None
+        snap = (self._active_snap
+                if self.point_mode or self._cv_drag is not None else None)
         # An elevator standing before the first point has no leg drawn
         # against it, so without the axis itself on screen Ctrl looks like
         # it did nothing at all.
@@ -4334,9 +4335,20 @@ class Viewport(QOpenGLWidget):
             pass
         elif self._cv_drag is not None:
             obj_id, index, plane_pt, normal = self._cv_drag
-            origin, direction = self.camera.ray_through(
-                pos.x(), pos.y(), self.width(), self.height())
-            hit = ray_plane(origin, direction, plane_pt, normal)
+            # The object snaps first, the way they come first for a click:
+            # a point dragged near the end of another curve lands on it,
+            # which is how two curves are made to meet. Not on its own
+            # curve, which is always under the cursor while it is dragged.
+            snap = self.snaps.find(self.camera, pos.x(), pos.y(),
+                                   self.width(), self.height(),
+                                   exclude=(obj_id,))
+            self._active_snap = snap
+            if snap is not None:
+                hit = np.asarray(snap[0], float)
+            else:
+                origin, direction = self.camera.ray_through(
+                    pos.x(), pos.y(), self.width(), self.height())
+                hit = ray_plane(origin, direction, plane_pt, normal)
             if hit is not None:
                 from ..core import geometry as _g
                 obj = self.scene.get(obj_id)
@@ -4552,6 +4564,8 @@ class Viewport(QOpenGLWidget):
             return
         if self._cv_drag is not None:
             self._cv_drag = None
+            self._active_snap = None       # the marker goes with the drag
+            self.update()
             return
         self._finish_pick(ev)
 

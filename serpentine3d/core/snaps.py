@@ -346,11 +346,17 @@ class SnapIndex:
 
     def find(self, camera, px: float, py: float, width: int, height: int,
              radius_px: float = 12.0, base_point=None, pending_points=None,
-             picked_points=None):
-        """Best snap near the pixel. Returns (point, kind) or None."""
+             picked_points=None, exclude=()):
+        """Best snap near the pixel. Returns (point, kind) or None.
+
+        `exclude` names objects whose features are not offered: the
+        curve whose control point is being dragged, for one, since it is
+        always under the cursor and would snap the point onto itself.
+        """
         if not self.enabled:
             return None
-        objects = self.scene.visible_objects()
+        objects = [o for o in self.scene.visible_objects()
+                   if o.id not in exclude]
         pts, kinds = [], []
 
         # what you are drawing is not in the scene yet, but you still want to
