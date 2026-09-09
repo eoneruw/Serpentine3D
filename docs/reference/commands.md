@@ -287,7 +287,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `offsetsrf` | Offsetsrf |
 | `patch` (`networksrf`) | Patch |
 | `pipe` | Pipe |
-| `planarsrf` (`planar`, `planesrf`) | Planarsrf |
+| `planarsrf` (`planar`, `planesrf`) | Planar surfaces from curves that close into loops. |
 | `project` | Project |
 | `pull` | Pull |
 | `revolve` (`rev`) | Revolve |
