@@ -884,6 +884,14 @@ class MainWindow(QMainWindow):
                      lambda: self.run_command("pointson"))
         self._action(m_edit, "Control Points Off", "F11",
                      lambda: self.run_command("pointsoff"))
+        # The commands that give a curve or surface more or fewer points
+        # to pull on, for people who would rather click than type.
+        self._action(m_edit, "Insert Control Point…", None,
+                     lambda: self.run_command("insertknot"))
+        self._action(m_edit, "Remove Control Point…", None,
+                     lambda: self.run_command("removeknot"))
+        self._action(m_edit, "Rebuild Curve…", None,
+                     lambda: self.run_command("rebuild"))
 
         m_view = mb.addMenu("&View")
         self._action(m_view, "Top", "F1", lambda: self.run_command("top"))
