@@ -61,7 +61,10 @@ CURVES = [
 
 SURFACES = [
     ("Edit surface", [("pointson", "Points On"),
-                      ("insertknot", "Insert Row"), ("untrim", "Untrim"),
+                      ("insertknot", "Insert Row"),
+                      ("insertknot Direction V", "Insert Column"),
+                      ("insertknot Direction Both", "Insert Both"),
+                      ("untrim", "Untrim"),
                       ("trim", "Trim"), ("split", "Split"),
                       ("join", "Join"), ("offsetsrf", "Offset"),
                       ("extendsrf", "Extend"), ("flip", "Flip"),
@@ -103,6 +106,49 @@ PICTURES = [
                  ("pictureframe", "Another Picture")]),
 ]
 
+#: Ctrl+Shift-picked edges and faces are a selection of their own, with
+#: their own commands; these show whenever any are held.
+EDGES = [
+    ("Picked edges", [("blendsrf", "Blend Surface"),
+                      ("dupedge", "Edge to Curve"),
+                      ("extendsrf", "Extend Surface"),
+                      ("filletedge", "Fillet Edge"),
+                      ("chamferedge", "Chamfer Edge")]),
+]
+FACES = [
+    ("Picked faces", [("extractsrf", "Extract Face"),
+                      ("pushpull", "Push/Pull"),
+                      ("dupfaceborder", "Face Border"),
+                      ("delete", "Delete Face")]),
+]
+
+#: Two kinds held together open up what one alone cannot: a surface and
+#: a solid are a cut, curves and a surface are a trim or a projection.
+#: (the two kinds held, group title, items); the same kind twice means
+#: two or more objects of it
+TOGETHER = [
+    (("solid", "surface"),
+     "Solid & surface", [("booleansplit", "Split Solid"),
+                         ("trim", "Trim"), ("split", "Split"),
+                         ("intersect", "Intersect")]),
+    (("curve", "surface"),
+     "Curve & surface", [("trim", "Trim"), ("split", "Split"),
+                         ("project", "Project"), ("pull", "Pull"),
+                         ("extrude", "Extrude")]),
+    (("curve", "solid"),
+     "Curve & solid", [("split", "Split"), ("project", "Project"),
+                       ("extrude", "Extrude")]),
+    (("surface", "surface"),
+     "Surfaces", [("join", "Join"), ("trim", "Trim"),
+                  ("intersect", "Intersect"), ("split", "Split")]),
+    (("curve", "curve"),
+     "Curves", [("loft", "Loft"), ("sweep2", "Sweep 2"),
+                ("edgesrf", "Edge Surface"), ("join", "Join"),
+                ("blendcrv", "Blend"), ("matchcrv", "Match")]),
+    (("mesh", "surface"),
+     "Mesh & surface", [("intersect", "Intersect")]),
+]
+
 ANY = [
     ("Transform", [("move", "Move"), ("copy", "Copy"), ("rotate", "Rotate"),
                    ("rotate3d", "Rotate 3D"), ("scale", "Scale"),
@@ -132,29 +178,62 @@ COLUMNS = 2
 PANEL_MIN_WIDTH = 240        # two buttons of a long-ish label, side by side
 
 
-def groups_for(kinds: set[str]) -> list:
-    """The groups the panel shows for a selection of these kinds."""
-    if not kinds:
-        return list(NOTHING)
+def groups_for(kinds, subkinds=(), counts=None) -> list:
+    """The groups the panel shows for a selection of these kinds.
+
+    `kinds` are the kinds of the objects held, `subkinds` those of any
+    Ctrl+Shift-picked edges or faces, and `counts` how many of each
+    object kind, so two curves offer a loft where one does not.
+    """
+    kinds = set(kinds)
+    subkinds = set(subkinds)
+    counts = counts or {}
     out: list = []
     seen = set()
+
+    def add(title, items):
+        if title not in seen:
+            seen.add(title)
+            out.append((title, items))
+
+    if "edge" in subkinds:
+        for title, items in EDGES:
+            add(title, items)
+    if "face" in subkinds:
+        for title, items in FACES:
+            add(title, items)
+    if not kinds:
+        if not subkinds:
+            return list(NOTHING)
+        return out
+    for (one, other), title, items in TOGETHER:
+        if one == other:
+            if counts.get(one, 0) >= 2:
+                add(title, items)
+        elif one in kinds and other in kinds:
+            add(title, items)
     for kind in ("curve", "surface", "solid", "mesh", "pointcloud",
                  "picture"):
         if kind in kinds:
             for title, items in BY_KIND[kind]:
-                if title not in seen:
-                    seen.add(title)
-                    out.append((title, items))
+                add(title, items)
     out.extend(ANY)
     return out
 
 
+def command_of(name: str):
+    """The command a button runs: `insertknot Direction V` is a macro,
+    insertknot with its first two prompts answered."""
+    return resolve(name.split()[0]) if name.strip() else None
+
+
 def describe(name: str) -> str:
     """The command's own first line, for a tooltip."""
-    cd = resolve(name)
+    cd = command_of(name)
     doc = (cd.fn.__doc__ or "").strip() if cd else ""
     first = doc.split("\n", 1)[0].strip() if doc else ""
-    return f"{name}: {first}" if first else name
+    head = name.split()[0]
+    return f"{head}: {first}" if first else head
 
 
 class ActionsPanel(QWidget):
@@ -209,19 +288,29 @@ class ActionsPanel(QWidget):
     def kinds(self) -> set[str]:
         return {o.kind for o in self.selection.objects()}
 
+    def subkinds(self) -> set[str]:
+        return {k for (_, k, _) in getattr(self.selection, "subobjects", [])}
+
+    def counts(self) -> dict:
+        out: dict = {}
+        for o in self.selection.objects():
+            out[o.kind] = out.get(o.kind, 0) + 1
+        return out
+
     def refresh(self, *_):
         self._clear()
         query = self.search.text().strip().lower()
         if query:
             self._show_search(query)
         else:
-            for title, items in groups_for(self.kinds()):
+            for title, items in groups_for(self.kinds(), self.subkinds(),
+                                           self.counts()):
                 self._add_group(title, items)
         self.body_layout.addStretch(1)
 
     def _add_group(self, title: str, items: list):
         live = [(name, label) for name, label in items
-                if resolve(name) is not None]
+                if command_of(name) is not None]
         if not live:
             return
         head = QLabel(title)
