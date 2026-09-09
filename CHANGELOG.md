@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **Ctrl+Shift-click picks edges and faces on a Mac.** Qt hands the Mac's
+  Control key over as Meta and turns Ctrl+click into a right click, so
+  doing what the docs say sent a right click with Meta+Shift — an Enter,
+  and nothing picked. Meta now counts as Ctrl for sub-object picks and
+  for holding control points, and the fabricated right click carries the
+  pick when Shift is down. ⌘+Shift works as it always did.
 - **Held faces and edges of a solid move together, as one change.** Found
   through the band: a band across a box holds its faces and the edges
   between them, and `move` on that, or on four rim edges, did something
