@@ -30,8 +30,8 @@ KINDS = (
 
 _BUTTON_STYLE = f"""
 QToolButton {{
-    padding: 1px 6px; font-size: 11px; border-radius: 3px;
-    border: 1px solid transparent; color: {theme.TEXT_MUTED};
+    padding: 1px 7px; font-size: 11px; border-radius: 3px;
+    border: 1px solid #3d3e44; color: {theme.TEXT_MUTED};
 }}
 QToolButton:hover {{ border-color: #4a4b52; }}
 QToolButton:checked {{
@@ -52,7 +52,7 @@ class SelectionFilterBar(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(2)
-        label = QLabel("Filter")
+        label = QLabel("Pick")
         label.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 11px;")
         label.setToolTip("Which kinds of object a click can pick. "
                          "Nothing lit: anything.")
