@@ -1127,6 +1127,10 @@ class Viewport(QOpenGLWidget):
         self._view_last = self.camera.state()
         self._view_moved_at = 0.0
         self._cv_drag = None                # (obj_id, index, plane_pt, normal)
+        # every held point at the start of the drag, (obj_id, index,
+        # where it was): the one under the cursor leads, the rest follow
+        # by the same offset
+        self._cv_drag_group: list = []
         self._frame_anchor = None   # overlays rebase by this; see view_anchor
         self._swipe_press = None            # where an Alt view-swipe started
         self._flight = None                 # (from, to, name, t0, secs)
@@ -4409,6 +4413,7 @@ class Viewport(QOpenGLWidget):
                     if abs(float(n @ fwd)) > 0.05:
                         fwd = n
                 self._cv_drag = (obj_id, index, np.asarray(world), fwd)
+                self._cv_drag_group = self._held_points_from()
                 self.cvEditBegan.emit()
                 return
             self._begin_hold(pos, ev.modifiers())
@@ -4478,7 +4483,8 @@ class Viewport(QOpenGLWidget):
             # curve, which is always under the cursor while it is dragged.
             snap = self._find_snap(self.camera, pos.x(), pos.y(),
                                    self.width(), self.height(),
-                                   exclude=(obj_id,))
+                                   exclude={obj_id} | {oid for oid, _, _
+                                                       in self._cv_drag_group})
             self._active_snap = snap
             if snap is not None:
                 hit = np.asarray(snap[0], float)
@@ -4487,20 +4493,7 @@ class Viewport(QOpenGLWidget):
                     pos.x(), pos.y(), self.width(), self.height())
                 hit = ray_plane(origin, direction, plane_pt, normal)
             if hit is not None:
-                from ..core import geometry as _g
-                obj = self.scene.get(obj_id)
-                if obj is not None:
-                    try:
-                        if obj.kind == "surface":
-                            new_shape = _g.move_surface_control_point(
-                                obj.shape, index, tuple(hit))
-                        else:
-                            new_shape = _g.move_control_point(
-                                obj.shape, index, tuple(hit))
-                        self.scene.replace_shape(obj_id, new_shape)
-                        self._cv_drag = (obj_id, index, plane_pt, normal)
-                    except _g.GeometryError:
-                        pass
+                self._drag_held_points(np.asarray(hit, float))
         elif (self._press_pos is not None
                 and ev.buttons() & Qt.MouseButton.LeftButton):
             self._track_band(pos)
@@ -4510,6 +4503,56 @@ class Viewport(QOpenGLWidget):
                 self.mouseWorldMoved.emit(pt)
                 self._show_lock_readout(pt)
         self._last_mouse = pos
+
+    def _held_points_from(self) -> list:
+        """(obj_id, index, position) for every held control point, as
+        they stand now. Two curves that meet at a corner have a point
+        each there, and a band drawn round the corner holds both; a drag
+        that moved only the one under the cursor pulled them apart."""
+        out = []
+        for oid, kind, idx in self.selection.subobjects:
+            if kind != "cv":
+                continue
+            obj = self.scene.get(oid)
+            if obj is None:
+                continue
+            pts = self._cv_points(obj)
+            if pts is not None and 0 <= idx < len(pts):
+                out.append((oid, idx, np.asarray(pts[idx], float).copy()))
+        return out
+
+    def _drag_held_points(self, hit: np.ndarray):
+        """Put the point under the cursor at `hit` and move every other
+        held point by the same offset, the way the gumball moves them
+        all: what is held is what is moved."""
+        from ..core import geometry as _g
+        obj_id, index, plane_pt, normal = self._cv_drag
+        group = self._cv_drag_group or [(obj_id, index, plane_pt)]
+        lead = next((p for oid, i, p in group
+                     if oid == obj_id and i == index), None)
+        if lead is None:
+            lead = plane_pt
+        offset = hit - lead
+        moved = False
+        for oid, idx, start in group:
+            obj = self.scene.get(oid)
+            if obj is None:
+                continue
+            target = tuple(hit) if (oid == obj_id and idx == index) \
+                else tuple(start + offset)
+            try:
+                if obj.kind == "surface":
+                    new_shape = _g.move_surface_control_point(
+                        obj.shape, idx, target)
+                else:
+                    new_shape = _g.move_control_point(obj.shape, idx,
+                                                      target)
+            except _g.GeometryError:
+                continue
+            self.scene.replace_shape(oid, new_shape)
+            moved = True
+        if moved:
+            self._cv_drag = (obj_id, index, plane_pt, normal)
 
     def _show_lock_readout(self, pt):
         """How far up the held axis the cursor has got, when nothing else says.
@@ -4701,6 +4744,7 @@ class Viewport(QOpenGLWidget):
             return
         if self._cv_drag is not None:
             self._cv_drag = None
+            self._cv_drag_group = []
             self._active_snap = None       # the marker goes with the drag
             self.update()
             return
@@ -5147,6 +5191,10 @@ class Viewport(QOpenGLWidget):
                         | Qt.KeyboardModifier.ControlModifier):
             sel.toggle_subobject(*entry)
             return entry in sel.subobjects
+        if entry in sel.subobjects and not sel.ids:
+            # one of the points already held: a press on it is the start
+            # of a drag of all of them, so they stay held together
+            return True
         if sel.ids or sel.subobjects != [entry]:
             sel.set([])                    # clears the sub-objects with them
             sel.toggle_subobject(*entry)
