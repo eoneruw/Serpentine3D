@@ -19,6 +19,21 @@ def _delete_held_points(ctx) -> bool:
         obj = ctx.scene.get(oid)
         if obj is None:
             continue
+        if obj.kind == "surface":
+            # a surface's points come in rows; the row the held ones
+            # sit on goes, and the surface moves to make do
+            try:
+                shape, what = g.delete_surface_control_rows(obj.shape,
+                                                            indices)
+            except g.GeometryError as exc:
+                ctx.echo(f"{obj.name}: {exc}")
+                continue
+            moved = g.surface_deviation(obj.shape, shape)
+            ctx.scene.replace_shape(oid, shape)
+            done += len(indices)
+            ctx.echo(f"{obj.name}: {what}, surface moved by up to "
+                     f"{ctx.scene.format_length(moved)}.")
+            continue
         was_closed = g.is_closed_curve(obj.shape)
         try:
             shape = g.delete_control_points(obj.shape, indices)
@@ -434,48 +449,75 @@ def cmd_insertknot(ctx):
 
 @command("removeknot")
 def cmd_removeknot(ctx):
-    """Take a knot out of a curve and say how far the curve moved.
+    """Take a knot out of a curve, or a row out of a surface, and say
+    how far it moved.
 
     Rhino's RemoveKnot. One span fewer, so the curve has to give up
-    whatever that knot was holding.
+    whatever that knot was holding. On a surface, Direction says which
+    way the row to take out runs — U for the row nearest the pick, V
+    for the column, Both for one of each — and the surface ghosts as
+    it will be before the click.
     """
-    objs = yield SelectReq("Select curves for knot removal", kinds=("curve",))
+    objs = yield SelectReq("Select curves or surfaces for knot removal",
+                           kinds=("curve", "surface"))
     ids = [o.id for o in objs]
     _show_points(ctx, ids)
+    surfaces = any(o.kind == "surface" for o in objs)
+    direction = "U"
+
+    def after(o, p):
+        if o.kind == "surface":
+            return g.remove_surface_knot(o.shape, p, direction)
+        return g.remove_knot(o.shape, p)
 
     def ghost(p):
-        # this one does move the curve, so the curve is the honest preview
+        # this one does move the object, so the object is the honest
+        # preview
         if not isinstance(p, (tuple, list)):
             return None
         o = _aimed_at(_live(ctx, ids), p)
         if o is None:
             return None
         try:
-            return g.remove_knot(o.shape, p)
+            return after(o, p)
         except g.GeometryError:
             return None
 
     removed = 0
     while True:
-        p = yield PointReq("Point on curve near the knot to remove "
-                           "(Enter to finish)", allow_empty=True,
-                           preview_fn=ghost)
+        opts = ("Direction",) if surfaces else ()
+        tail = f"  [Direction={direction}]" if surfaces else ""
+        what = "curve or surface" if surfaces else "curve"
+        p = yield PointReq(f"Point on {what} near the knot to remove "
+                           f"(Enter to finish){tail}", allow_empty=True,
+                           extra_options=opts, preview_fn=ghost)
         if p is None:
             break
+        if p == "Direction":
+            direction = yield OptionReq("Direction of the row to take out",
+                                        options=["U", "V", "Both"],
+                                        default=direction)
+            continue
         o = _aimed_at(_live(ctx, ids), p)
         if o is None:
             continue
         try:
-            shape = g.remove_knot(o.shape, p)
+            shape = after(o, p)
         except g.GeometryError as exc:
             ctx.echo(f"{o.name}: {exc}")
             continue
-        moved = g.max_deviation(o.shape, shape)
+        if o.kind == "surface":
+            moved = g.surface_deviation(o.shape, shape)
+            word = "row" if direction == "U" else (
+                "column" if direction == "V" else "row and column")
+        else:
+            moved = g.max_deviation(o.shape, shape)
+            word = "knot"
         ctx.scene.replace_shape(o.id, shape)
         removed += 1
-        ctx.echo(f"{o.name}: knot out, curve moved by up to "
+        ctx.echo(f"{o.name}: {word} out, moved by up to "
                  f"{ctx.scene.format_length(moved)}.")
-    ctx.echo(f"Removed {removed} knot(s)." if removed else "Nothing removed.")
+    ctx.echo(f"Removed {removed}." if removed else "Nothing removed.")
 
 
 @command("removecontrolpoint", repeatable=False)

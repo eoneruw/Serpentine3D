@@ -2444,6 +2444,128 @@ def surface_iso_lines_at(shape, point, direction: str = "u") -> list:
     return out
 
 
+def _remove_surface_knot_at(bs, which: str, param: float):
+    """Take the interior knot nearest `param` out of the surface in one
+    direction ("u" or "v"). The surface moves; the deviation is the
+    caller's to measure. Raises when there is none to take."""
+    from OCP.Precision import Precision
+    if which == "u":
+        count, knot, mult, remove = (bs.NbUKnots(), bs.UKnot,
+                                     bs.UMultiplicity, bs.RemoveUKnot)
+    else:
+        count, knot, mult, remove = (bs.NbVKnots(), bs.VKnot,
+                                     bs.VMultiplicity, bs.RemoveVKnot)
+    inner = list(range(2, count))
+    if not inner:
+        raise GeometryError(f"No {which} rows left to take out — the "
+                            "surface is a single span that way already")
+    i = min(inner, key=lambda j: abs(knot(j) - param))
+    if not remove(i, mult(i) - 1, Precision.Infinite_s()):
+        raise GeometryError("That row cannot come out without tearing "
+                            "the surface")
+
+
+def remove_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
+    """A copy of the surface with the knot row nearest `point` taken out.
+
+    The surface's version of remove_knot: "u" takes out the row of
+    control points running across the surface nearest the picked u
+    (the one insert_surface_knot "u" would have put there), "v" the
+    other way, "both" one of each. The surface moves to make do with
+    the handles it has left; measure it with surface_deviation.
+    """
+    bs, _face = _face_bspline_surface(shape)
+    u, v = _surface_uv_at(bs, point)
+    want = direction.lower()
+    if want not in ("u", "v", "both"):
+        raise GeometryError("direction is u, v or both")
+    if want in ("u", "both"):
+        _remove_surface_knot_at(bs, "u", u)
+    if want in ("v", "both"):
+        _remove_surface_knot_at(bs, "v", v)
+    mk = BRepBuilderAPI_MakeFace(bs, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    return mk.Face()
+
+
+def _greville(knots_flat: list, degree: int, i: int) -> float:
+    """Where pole i (0-based) of a spline mostly acts: the mean of the
+    degree knots after it in the flat knot sequence."""
+    return sum(knots_flat[i + 1:i + degree + 1]) / degree
+
+
+def delete_surface_control_rows(shape, flat_indices: list[int]):
+    """The surface with the row of control points these belong to gone.
+
+    A surface's control points come in rows, and one cannot go alone:
+    the grid would have a hole in it. So holding one or more points
+    and deleting them takes out the whole row they sit on — the u row
+    when the held points share one, the v row when they share that,
+    and if they share both (a single point) the shorter of the two,
+    the smaller edit. Returns (shape, description).
+    """
+    bs, _face = _face_bspline_surface(shape)
+    nu, nv = bs.NbUPoles(), bs.NbVPoles()
+    rows = sorted({divmod(i, nv) for i in flat_indices
+                   if 0 <= i < nu * nv})
+    if not rows:
+        raise GeometryError("Control point index out of range")
+    us = {i for i, _ in rows}
+    vs = {j for _, j in rows}
+    if len(us) == 1 and len(vs) == 1:
+        which = "u" if nv <= nu else "v"       # one point: the shorter row
+    elif len(us) == 1:
+        which = "u"
+    elif len(vs) == 1:
+        which = "v"
+    else:
+        raise GeometryError("Hold points along one row or one column of "
+                            "the surface — these run both ways")
+    from OCP.TColStd import TColStd_Array1OfReal
+    if which == "u":
+        flat = TColStd_Array1OfReal(1, bs.NbUPoles() + bs.UDegree() + 1)
+        bs.UKnotSequence(flat)
+        deg = bs.UDegree()
+        targets = sorted(us, reverse=True)
+    else:
+        flat = TColStd_Array1OfReal(1, bs.NbVPoles() + bs.VDegree() + 1)
+        bs.VKnotSequence(flat)
+        deg = bs.VDegree()
+        targets = sorted(vs, reverse=True)
+    seq = [flat.Value(k) for k in range(1, flat.Length() + 1)]
+    # highest index first: each removal renumbers the poles after it
+    for idx in targets:
+        _remove_surface_knot_at(bs, which, _greville(seq, deg, idx))
+    mk = BRepBuilderAPI_MakeFace(bs, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    across = nv if which == "u" else nu
+    what = ("row" if which == "u" else "column")
+    n = len(targets)
+    return mk.Face(), (f"{n} {what}{'s' if n > 1 else ''} of {across} "
+                       f"control points out")
+
+
+def surface_deviation(a, b, count: int = 12) -> float:
+    """How far one single-face surface runs from another, sampled on a
+    grid of the first's parameters and measured to the second."""
+    from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+    from .occ import BRep_Tool
+    fa, fb = faces_of(a)[0], faces_of(b)[0]
+    sa, sb = BRep_Tool.Surface_s(fa), BRep_Tool.Surface_s(fb)
+    u0, u1, v0, v1 = _face_bspline_surface(a)[0].Bounds()
+    worst = 0.0
+    for i in range(count + 1):
+        for j in range(count + 1):
+            p = sa.Value(u0 + (u1 - u0) * i / count,
+                         v0 + (v1 - v0) * j / count)
+            proj = GeomAPI_ProjectPointOnSurf(p, sb)
+            if proj.NbPoints():
+                worst = max(worst, proj.LowerDistance())
+    return worst
+
+
 def remove_knot(shape, point) -> TopoDS_Shape:
     """A copy of the curve with the knot nearest `point` taken out.
 
