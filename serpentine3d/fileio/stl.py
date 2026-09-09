@@ -18,7 +18,8 @@ import struct
 import numpy as np
 
 from ..core.mesh import MeshShape
-from ..core.tessellate import default_deflection, tessellate
+from ..core.tessellate import (ANGULAR_DEFLECTION, default_deflection,
+                               tessellate)
 
 _HEADER = b"Serpentine3D binary STL"
 
@@ -47,7 +48,10 @@ def export_stl(named_shapes: list, path: str, *, binary: bool = True,
         shape = entry[1]
         defl = deflection if deflection is not None \
             else default_deflection(shape) * factor
-        mesh = tessellate(shape, defl)
+        # The angle between facets scales with the preset as the chord
+        # does, or the display's angular limit would cap every preset at
+        # the same count on a small round part.
+        mesh = tessellate(shape, defl, angular=ANGULAR_DEFLECTION * factor)
         if not mesh.has_faces:
             continue
         v = np.asarray(mesh.vertices, np.float64)

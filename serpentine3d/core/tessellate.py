@@ -113,6 +113,16 @@ class DisplayMesh:
         return self._bounds
 
 
+# How far, in radians, the mesh may turn between two neighbouring vertices
+# of a curved face. 0.35 (20 degrees) was coarse enough that a sphere came
+# out with forty segments round it, and the analysis modes — which read
+# the normal between vertices — showed every one as a kink in the stripes.
+# 0.15 (8.6 degrees) is about two and a half times the triangles on a
+# sphere and unnoticeable on a box; the linear deflection below still
+# decides most of the count on a big model.
+ANGULAR_DEFLECTION = 0.15
+
+
 def _deflection_for(shape) -> float:
     (mn, mx) = geometry.bbox(shape)
     diag = float(np.linalg.norm(np.subtract(mx, mn)))
@@ -379,7 +389,8 @@ def _face_isocurves(face) -> list[np.ndarray]:
     return polylines
 
 
-def tessellate(shape, deflection: float | None = None) -> DisplayMesh:
+def tessellate(shape, deflection: float | None = None,
+               angular: float | None = None) -> DisplayMesh:
     from .mesh import MeshShape, mesh_to_display
     from .pointcloud import PointCloudShape, cloud_to_display
     if isinstance(shape, MeshShape):
@@ -388,8 +399,10 @@ def tessellate(shape, deflection: float | None = None) -> DisplayMesh:
         return cloud_to_display(shape)
     if deflection is None:
         deflection = _deflection_for(shape)
+    if angular is None:
+        angular = ANGULAR_DEFLECTION
     if geometry.shape_kind(shape) != "curve":
-        BRepMesh_IncrementalMesh(shape, deflection, False, 0.35, True)
+        BRepMesh_IncrementalMesh(shape, deflection, False, angular, True)
 
     all_verts, all_norms, all_tris, all_curv, isos = [], [], [], [], []
     tri_face_ids = []
