@@ -78,6 +78,23 @@ EDGE_PICK_PX = 4.5        # a picked edge, wide enough to call feedback
 EDGE_PICK_HALO_PX = 7.0   # the dark rim under it
 
 
+#: Ctrl, as either key a Mac has for it (Qt calls the marked one Meta).
+CTRL_KEYS = (Qt.KeyboardModifier.ControlModifier
+             | Qt.KeyboardModifier.MetaModifier)
+
+
+def subobject_chord(modifiers) -> bool:
+    """Is this the Ctrl+Shift that picks an edge or a face?
+
+    On a Mac Qt hands the Command key over as Control and the key marked
+    Control as Meta, so someone reading "Ctrl+Shift-click" and doing
+    exactly that was sending Meta+Shift, which picked nothing. Either
+    key counts: the chord is the same chord on every keyboard.
+    """
+    return bool(modifiers & CTRL_KEYS) and bool(
+        modifiers & Qt.KeyboardModifier.ShiftModifier)
+
+
 def cv_marker_size(points, eye, width, height, half_px):
     """World half-widths that draw `half_px` pixels either side of each point.
 
@@ -4708,6 +4725,13 @@ class Viewport(QOpenGLWidget):
             if press is not None and \
                     (pos - press).manhattanLength() <= 4:
                 # a click, not an orbit/pan drag
+                if (subobject_chord(ev.modifiers()) and self.space == "model"
+                        and not self.point_mode):
+                    # macOS turns Ctrl+click into a right click before
+                    # it reaches us; Ctrl+Shift-click on an edge is still
+                    # a pick, not an Enter
+                    self._toggle_subobject_at(pos)
+                    return
                 if self._fire_chord(ev):
                     return
                 self.enterShortcut.emit()      # Rhino-style Enter
@@ -4876,6 +4900,13 @@ class Viewport(QOpenGLWidget):
             gb.end_drag()
         self.update()
 
+    def _toggle_subobject_at(self, pos):
+        """Ctrl+Shift-click: the edge or face under the cursor, in or out."""
+        hit = self.pick_subobject(pos.x(), pos.y())
+        if hit is not None:
+            self.selection.toggle_subobject(*hit)
+            self.update()
+
     def _finish_pick(self, ev):
         """What a left release does to the selection, band or single click.
 
@@ -4899,13 +4930,8 @@ class Viewport(QOpenGLWidget):
             self._press_pos = None
             if self.point_mode:
                 return
-            mods = ev.modifiers()
-            if (mods & Qt.KeyboardModifier.ControlModifier
-                    and mods & Qt.KeyboardModifier.ShiftModifier):
-                hit = self.pick_subobject(pos.x(), pos.y())
-                if hit is not None:
-                    self.selection.toggle_subobject(*hit)
-                    self.update()
+            if subobject_chord(ev.modifiers()):
+                self._toggle_subobject_at(pos)
                 return
             picked = self.pick_object(pos.x(), pos.y())
             if picked:
@@ -5011,7 +5037,7 @@ class Viewport(QOpenGLWidget):
         """
         sel = self.selection
         caught = [(obj_id, "cv", i) for obj_id, i in hits]
-        if modifiers & Qt.KeyboardModifier.ControlModifier:
+        if modifiers & CTRL_KEYS:
             drop = set(caught)
             sel.set_subobjects([e for e in sel.subobjects if e not in drop])
             return
@@ -5187,8 +5213,7 @@ class Viewport(QOpenGLWidget):
         """
         sel = self.selection
         entry = (obj_id, "cv", index)
-        if modifiers & (Qt.KeyboardModifier.ShiftModifier
-                        | Qt.KeyboardModifier.ControlModifier):
+        if modifiers & (Qt.KeyboardModifier.ShiftModifier | CTRL_KEYS):
             sel.toggle_subobject(*entry)
             return entry in sel.subobjects
         if entry in sel.subobjects and not sel.ids:
