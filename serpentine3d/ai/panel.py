@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
@@ -19,6 +21,7 @@ _CHIP_FAIL = "color: #d9705f; font-family: monospace; font-size: 11px;"
 _USER_STYLE = ("background: #2b3b4d; color: #e8e9ea; padding: 6px 10px;"
                "border-radius: 6px;")
 _ERR_STYLE = "color: #d9705f;"
+_STATUS_STYLE = "color: #85868a; font-size: 11px; font-style: italic;"
 _HINT = ("Try: “a spiral staircase, 3 m tall, 14 steps” · “fillet every "
          "edge of the box 2 mm” · “what's in this scene?”")
 
@@ -47,6 +50,16 @@ class AiPanel(QWidget):
         self.agent: Agent | None = None
         self._stream_label: QLabel | None = None
         self._chips: list[QLabel] = []
+        # What the panel says while there is nothing yet to show. A model
+        # that thinks before it answers can be quiet for a minute, and a
+        # panel that is quiet with it looks exactly like a panel that has
+        # hung — or, until recently, one that had silently failed.
+        self._status_label: QLabel | None = None
+        self._status_phase = ""
+        self._status_since = 0.0
+        self._status_timer = QTimer(self)
+        self._status_timer.setInterval(500)
+        self._status_timer.timeout.connect(self._tick_status)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
@@ -153,6 +166,7 @@ class AiPanel(QWidget):
             self.agent = Agent(SerpApi(self.window),
                                AnthropicClient(key, model), parent=self)
             self.agent.textDelta.connect(self._on_text)
+            self.agent.thinkingDelta.connect(self._on_thinking)
             self.agent.toolStarted.connect(self._on_tool_start)
             self.agent.toolFinished.connect(self._on_tool_finish)
             self.agent.turnFinished.connect(self._on_finished)
@@ -173,7 +187,43 @@ class AiPanel(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         self._stream_label = None
+        self._clear_status()
         self.usage.setText("")
+
+    # -------------------------------------------------------------- status
+
+    def _set_status(self, phase: str):
+        """Show `phase` at the foot of the feed, with how long it has been
+        going: 'Connecting…' until the API answers, 'Thinking…' while the
+        model reasons, 'Working…' between a tool and the next words."""
+        if self._status_label is None:
+            self._status_label = self._add_label("", wrap=True)
+            self._status_label.setStyleSheet(_STATUS_STYLE)
+            self._status_since = time.monotonic()
+            self._status_timer.start()
+        if phase != self._status_phase:
+            self._status_phase = phase
+            self._tick_status()
+        self._scroll_down()
+
+    def _tick_status(self):
+        if self._status_label is None:
+            return
+        secs = int(time.monotonic() - self._status_since)
+        suffix = f"  {secs} s" if secs >= 3 else ""
+        self._status_label.setText(self._status_phase + suffix)
+
+    def _clear_status(self):
+        self._status_timer.stop()
+        if self._status_label is not None:
+            self.feed.removeWidget(self._status_label)
+            self._status_label.deleteLater()
+            self._status_label = None
+        self._status_phase = ""
+
+    def status_text(self) -> str:
+        """What the panel is saying while it waits — '' when it is not."""
+        return self._status_label.text() if self._status_label else ""
 
     # ---------------------------------------------------------------- send
 
@@ -196,17 +246,23 @@ class AiPanel(QWidget):
         self._stream_label = None
         self.btn_send.setText("Stop")
         self.input.setEnabled(False)
+        self._set_status("Connecting…")
         agent.send(text)
 
     # -------------------------------------------------------------- events
 
     def _on_text(self, delta: str):
+        self._clear_status()
         if self._stream_label is None:
             self._stream_label = self._add_label("", wrap=True)
         self._stream_label.setText(self._stream_label.text() + delta)
         self._scroll_down()
 
+    def _on_thinking(self, delta: str):
+        self._set_status("Thinking…")
+
     def _on_tool_start(self, name: str, summary: str):
+        self._clear_status()
         self._stream_label = None          # next text starts a fresh block
         chip = self._add_label(f"→ {summary} …", wrap=True)
         chip.setStyleSheet(_CHIP_RUNNING)
@@ -221,8 +277,12 @@ class AiPanel(QWidget):
         base = chip.text().rstrip(" …")
         chip.setText(f"{base}  {mark}" + ("" if ok else f"  {summary}"))
         chip.setStyleSheet(_CHIP_OK if ok else _CHIP_FAIL)
+        # the tool is done and the model has not spoken yet: the round
+        # trip for its next words is the same wait as the first one
+        self._set_status("Working…")
 
     def _on_finished(self, reason: str):
+        self._clear_status()
         self._stream_label = None
         self.btn_send.setText("Send")
         self.input.setEnabled(True)
@@ -235,6 +295,7 @@ class AiPanel(QWidget):
         self._scroll_down()
 
     def _on_error(self, message: str):
+        self._clear_status()
         self._stream_label = None
         lbl = self._add_label(message, wrap=True)
         lbl.setStyleSheet(_ERR_STYLE)
