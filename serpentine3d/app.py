@@ -606,6 +606,15 @@ class MainWindow(QMainWindow):
 
     def _wire_viewport(self, vp):
         vp.installEventFilter(self)
+        # One set of object snaps for every pane. Each Viewport builds its
+        # own SnapIndex from the config as it starts, and the Osnap bar
+        # spoke only to the primary's, so a pane opened by 4view kept the
+        # snaps it was born with: switch End off along the bottom and a
+        # drag in the Right pane still landed on ends. The index carries
+        # no per-pane state (find takes the camera), so they share it.
+        vp.snaps = self.viewport.snaps
+        vp.grid_snap = self.viewport.grid_snap
+        vp.ortho = self.viewport.ortho
         vp.displayModeChanged.connect(self._update_status)
         # The mode is also reachable from the menu, the viewport title and
         # the command line, none of which come through the panel. Only the

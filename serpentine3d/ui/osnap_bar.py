@@ -83,13 +83,23 @@ class OsnapBar(QWidget):
         if self.config:
             self.config.set("osnaps", kind, on)
 
+    def _panes(self) -> list:
+        """Every pane the window has, when the viewport belongs to a window
+        that keeps several; just the one otherwise. Grid snap and Ortho
+        live on the pane, so a toggle here has to reach all of them."""
+        win = self.viewport.window()
+        listing = getattr(win, "all_viewports", None)
+        return list(listing()) if listing is not None else [self.viewport]
+
     def _grid_toggled(self, on: bool):
-        self.viewport.grid_snap = on
+        for vp in self._panes():
+            vp.grid_snap = on
         if self.config:
             self.config.set("grid_snap", on)
 
     def _ortho_toggled(self, on: bool):
-        self.viewport.ortho = on
+        for vp in self._panes():
+            vp.ortho = on
         if self.config:
             self.config.set("ortho", on)
 
