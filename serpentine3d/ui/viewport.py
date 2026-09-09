@@ -3433,15 +3433,20 @@ class Viewport(QOpenGLWidget):
 
     # -- what the mode draws, and what the user says instead --
 
-    #: Modes that leave surface isocurves off unless asked. Only rendered:
-    #: a render showing the wire cage of every surface is not a render, and
-    #: it is what GitHub #5 was looking at.
-    _ISO_OFF_MODES = ("rendered", "pbr")
-    #: Modes that leave surface edges off unless asked. A physically based
-    #: render with a black outline round every face reads as a technical
-    #: illustration, and the outlines hide the very highlights along the
-    #: edges that the mode exists to show.
-    _EDGE_OFF_MODES = ("pbr",)
+    #: Modes that leave surface isocurves off unless asked. Rendered,
+    #: because a render showing the wire cage of every surface is not a
+    #: render (GitHub #5); and the analysis modes, because what they show
+    #: is read off the surface itself — a stripe that bends, a colour that
+    #: changes — and lines drawn over that read as breaks in it.
+    _ANALYSIS_MODES = ("zebra", "draft", "curvature")
+    _ISO_OFF_MODES = ("rendered", "pbr") + _ANALYSIS_MODES
+    #: Modes that leave surface edges off unless asked: the analysis
+    #: modes again, for the same reason. A seam edge down a cylinder
+    #: looked like a crease in the stripes; it is not one.
+    #: A physically based render with a black outline round every face
+    #: reads as a technical illustration, and the outlines hide the very
+    #: highlights along the edges the mode exists to show.
+    _EDGE_OFF_MODES = ("pbr",) + _ANALYSIS_MODES
 
     def shows_isocurves(self, mode: str | None = None) -> bool:
         """Whether surface isocurves are drawn in this pane.
@@ -3455,9 +3460,9 @@ class Viewport(QOpenGLWidget):
         return (mode or self.display_mode) not in self._ISO_OFF_MODES
 
     def shows_edges(self, mode: str | None = None) -> bool:
-        """Whether surface and mesh edges are drawn in this pane. Every mode
-        but the PBR render wants them; the override is there for the odd
-        render that doesn't, or the odd PBR view that does."""
+        """Whether surface and mesh edges are drawn in this pane: every
+        mode but the PBR render and the analysis ones wants them, and the override (the
+        display panel's Edges switch) has the last word either way."""
         if self._edge_override is not None:
             return self._edge_override
         return (mode or self.display_mode) not in self._EDGE_OFF_MODES

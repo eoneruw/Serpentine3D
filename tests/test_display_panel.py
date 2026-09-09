@@ -18,6 +18,7 @@ import pytest
 from serpentine3d.app import MainWindow
 from serpentine3d.core.scene import Scene
 from serpentine3d.core.selection import SelectionManager
+from serpentine3d.ui.viewport import Viewport
 
 
 def _viewport(scene=None):
@@ -53,16 +54,16 @@ def test_a_rendered_view_does_not(vp):
     assert not vp.shows_isocurves()
 
 
-def test_every_mode_shows_edges_by_default(vp):
-    """Except the PBR render, whose outlines would hide the highlights
-    along the edges it exists to show; the panel's checkbox brings them
-    back there like anywhere else."""
+def test_every_working_mode_shows_edges_by_default(vp):
+    """The PBR render (outlines would hide the highlights along the
+    edges it exists to show) and the analysis modes are the exceptions: what they show is read off
+    the surface, and lines over it read as breaks in it."""
     for mode in vp.DISPLAY_MODES:
         vp.set_display_mode(mode)
-        if mode == "pbr":
-            assert not vp.shows_edges()
-            continue
-        assert vp.shows_edges(), f"{mode} lost its edges"
+        if mode == "pbr" or mode in Viewport._ANALYSIS_MODES:
+            assert not vp.shows_edges(), f"{mode} drew its edges"
+        else:
+            assert vp.shows_edges(), f"{mode} lost its edges"
 
 
 # -- and the override on top --
