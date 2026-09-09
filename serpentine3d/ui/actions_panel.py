@@ -64,6 +64,8 @@ SURFACES = [
                       ("insertknot", "Insert Row"),
                       ("insertknot Direction V", "Insert Column"),
                       ("insertknot Direction Both", "Insert Both"),
+                      ("removeknot", "Remove Row"),
+                      ("removeknot Direction V", "Remove Column"),
                       ("untrim", "Untrim"),
                       ("trim", "Trim"), ("split", "Split"),
                       ("join", "Join"), ("offsetsrf", "Offset"),
