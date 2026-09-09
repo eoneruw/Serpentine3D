@@ -502,6 +502,7 @@ class PropertiesPanel(QWidget):
 
     def _show_picture(self, obj):
         m = obj.material or {}
+        was = self._updating          # nested in a refresh that set it
         self._updating = True
         try:
             self.opacity_slider.setValue(
@@ -511,7 +512,7 @@ class PropertiesPanel(QWidget):
             self.crop_btn.setChecked(shown)
             self.crop_reset.setEnabled(tuple(obj.shape.crop) != (0, 0, 1, 1))
         finally:
-            self._updating = False
+            self._updating = was
 
     def _change_opacity(self, value: int):
         obj = self._selected()
