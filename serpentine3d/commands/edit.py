@@ -340,59 +340,94 @@ def _show_points(ctx, ids):
 
 @command("insertknot", aliases=("insertcontrolpoint",))
 def cmd_insertknot(ctx):
-    """Add a control point to a curve without moving the curve.
+    """Add a control point to a curve or a row of them to a surface.
+
+    Neither moves by so much as a tolerance.
 
     Rhino's InsertKnot and InsertControlPoint. Automatic puts a knot in the
-    middle of every span instead of taking them one click at a time.
+    middle of every span instead of taking them one click at a time. On a
+    surface, Direction says which way the new row runs: U adds a row
+    across the surface at the picked u, V the other way, Both a row each
+    way; the row's line ghosts under the cursor before the click.
     """
-    objs = yield SelectReq("Select curves for knot insertion",
-                           kinds=("curve",))
+    objs = yield SelectReq("Select curves or surfaces for knot insertion",
+                           kinds=("curve", "surface"))
     ids = [o.id for o in objs]
     _show_points(ctx, ids)
+    surfaces = any(o.kind == "surface" for o in objs)
+    direction = "U"
 
     def ghost(p):
         # the curve does not move, so a ghost of the curve would show
         # nothing. What changes is the control polygon and where the new
-        # handle sits in it, so that is what follows the cursor.
+        # handle sits in it, so that is what follows the cursor. On a
+        # surface it is the line the new row will follow.
         if not isinstance(p, (tuple, list)):
             return None
         o = _aimed_at(_live(ctx, ids), p)
         if o is None:
             return None
         try:
+            if o.kind == "surface":
+                return g.make_compound(
+                    g.surface_iso_lines_at(o.shape, p, direction))
             out = g.insert_knot(o.shape, p)
             return g.make_polyline(g.get_control_points(out),
                                    closed=g.is_closed_curve(out))
         except g.GeometryError:
             return None
 
+    def count(o) -> int:
+        if o.kind == "surface":
+            return len(g.surface_control_points(o.shape)[0])
+        return len(g.get_control_points(o.shape))
+
     added = 0
     while True:
-        p = yield PointReq("Point on curve to add a knot (Enter to finish)",
-                           allow_empty=True, extra_options=("Automatic",),
+        opts = ["Automatic"]
+        if surfaces:
+            opts.append("Direction")
+        what = "curve or surface" if surfaces else "curve"
+        tail = f"  [Direction={direction}]" if surfaces else ""
+        p = yield PointReq(f"Point on {what} to add a knot (Enter to "
+                           f"finish){tail}",
+                           allow_empty=True, extra_options=tuple(opts),
                            preview_fn=ghost)
         if p is None:
             break
+        if p == "Direction":
+            direction = yield OptionReq("Direction of the new row",
+                                        options=["U", "V", "Both"],
+                                        default=direction)
+            continue
         if p == "Automatic":
             for o in _live(ctx, ids):
-                before = len(g.get_control_points(o.shape))
+                before = count(o)
                 try:
-                    shape = g.insert_knots_at_spans(o.shape)
+                    if o.kind == "surface":
+                        shape = g.insert_surface_knots_at_spans(o.shape)
+                    else:
+                        shape = g.insert_knots_at_spans(o.shape)
                 except g.GeometryError as exc:
                     ctx.echo(f"{o.name}: {exc}")
                     continue
                 ctx.scene.replace_shape(o.id, shape)
-                added += len(g.get_control_points(shape)) - before
+                added += count(ctx.scene.get(o.id)) - before
             continue
         o = _aimed_at(_live(ctx, ids), p)
         if o is None:
             continue
+        before = count(o)
         try:
-            ctx.scene.replace_shape(o.id, g.insert_knot(o.shape, p))
+            if o.kind == "surface":
+                shape = g.insert_surface_knot(o.shape, p, direction)
+            else:
+                shape = g.insert_knot(o.shape, p)
+            ctx.scene.replace_shape(o.id, shape)
         except g.GeometryError as exc:
             ctx.echo(f"{o.name}: {exc}")
             continue
-        added += 1
+        added += count(ctx.scene.get(o.id)) - before
     ctx.echo(f"Added {added} control point(s)." if added
              else "Nothing added.")
 
