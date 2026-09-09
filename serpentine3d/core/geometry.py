@@ -653,6 +653,96 @@ def planar_face(shape) -> TopoDS_Shape:
     return mk.Face()
 
 
+def planar_faces_from_curves(shapes: list) -> list:
+    """Planar surfaces from a set of curves, the way Rhino's PlanarSrf
+    reads them: curves that meet end to end are joined into loops,
+    every closed loop becomes a face, and a loop lying inside another
+    on the same plane is a hole in it rather than a second face.
+
+    Four lines drawn as a box used to be four separate refusals ("Curve
+    must be closed"), since each was asked to close on its own.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepTopAdaptor import BRepTopAdaptor_FClass2d
+    from OCP.ShapeAnalysis import (ShapeAnalysis_FreeBounds,
+                                   ShapeAnalysis_Surface)
+    from OCP.TopAbs import TopAbs_State
+    from OCP.TopTools import TopTools_HSequenceOfShape
+
+    # every edge of every curve into one bag, then let OCCT connect
+    # what touches: closed loops come out as closed wires, the rest open
+    edges = TopTools_HSequenceOfShape()
+    for sh in shapes:
+        for e in edges_of(sh):
+            edges.Append(e)
+    if edges.Length() == 0:
+        raise GeometryError("No curves to make a surface from")
+    wires = TopTools_HSequenceOfShape()
+    ShapeAnalysis_FreeBounds.ConnectEdgesToWires_s(edges, tol(), False,
+                                                    wires)
+    loops = []
+    for i in range(1, wires.Length() + 1):
+        w = occ.to_wire(wires.Value(i))
+        if BRep_Tool.IsClosed_s(w):
+            loops.append(w)
+    if not loops:
+        raise GeometryError("The curves do not close into a loop")
+
+    def face_of(wire):
+        mk = BRepBuilderAPI_MakeFace(wire, True)
+        if not mk.IsDone():
+            raise GeometryError("Planar surface failed (the loop may "
+                                "not be flat)")
+        return mk.Face()
+
+    faces = [face_of(w) for w in loops]
+    # a loop whose start lies inside another loop's face, on its plane,
+    # is a hole in it; the outermost loops are the faces
+    areas = [occ.surface_properties(f).Mass() for f in faces]
+    order = sorted(range(len(faces)), key=lambda k: -areas[k])
+    holes: dict = {k: [] for k in order}
+    taken = set()
+    for k in order:
+        if k in taken:
+            continue
+        outer = faces[k]
+        classify = BRepTopAdaptor_FClass2d(outer, tol())
+        surf = ShapeAnalysis_Surface(BRep_Tool.Surface_s(outer))
+        for j in order:
+            if j == k or j in taken or areas[j] >= areas[k]:
+                continue
+            start = occ.edge_adaptor(edges_of(loops[j])[0]).Value(
+                occ.edge_adaptor(edges_of(loops[j])[0]).FirstParameter())
+            uv = surf.ValueOfUV(start, tol())
+            if surf.Gap() > tol() * 10:
+                continue                      # not on this face's plane
+            if classify.Perform(uv) == TopAbs_State.TopAbs_IN:
+                holes[k].append(j)
+                taken.add(j)
+    out = []
+    for k in order:
+        if k in taken:
+            continue
+        if not holes[k]:
+            out.append(faces[k])
+            continue
+        # a hole wire has to run the other way round from the outer one;
+        # which way that is depends on how the loop was drawn, so try
+        # reversed first and check the area came down, not up
+        face = None
+        for reverse in (True, False):
+            mk = BRepBuilderAPI_MakeFace(faces[k])
+            for j in holes[k]:
+                hole = occ.to_wire(loops[j])
+                mk.Add(occ.to_wire(hole.Reversed()) if reverse else hole)
+            trial = mk.Face()
+            if occ.surface_properties(trial).Mass() < areas[k] - tol():
+                face = trial
+                break
+        out.append(face if face is not None else faces[k])
+    return out
+
+
 def offset_curve(shape, distance: float) -> TopoDS_Shape:
     """Offset a planar curve by a distance (sign picks the side)."""
     from .occ import BRepOffsetAPI_MakeOffset, GeomAbs_JoinType
