@@ -3856,7 +3856,62 @@ class Viewport(QOpenGLWidget):
             self.layout_view.double_click(pos.x(), pos.y())
             self.update()
             return
+        if (self.space == "model" and not self.point_mode
+                and ev.button() == Qt.MouseButton.LeftButton
+                and not ev.modifiers()):
+            pos = ev.position()
+            if self.add_control_point_at(pos.x(), pos.y()):
+                return
         super().mouseDoubleClickEvent(ev)
+
+    def add_control_point_at(self, px: float, py: float) -> bool:
+        """Double-click on a curve: a new control point where you clicked.
+
+        `insertknot` does this by the book — pick the curves, Enter, then
+        click along them — and that is three steps for what is, when you
+        are shaping a line by hand, one gesture: more handle here. The
+        curve does not move (it is a knot insertion), the point comes up
+        held, so the next drag pulls on it, and the curve's points are
+        shown if they were not. True when a point was added.
+        """
+        from ..core import geometry as _g
+        if self._cv_hit(px, py) is not None:
+            return False                # that is a point already
+        obj_id = self.pick_object(px, py)
+        obj = self.scene.get(obj_id) if obj_id else None
+        if obj is None or obj.kind != "curve":
+            return False
+        # Where on the curve, from where on the screen: the nearest place
+        # on its drawn segments to the cursor, the way the Near snap
+        # looks, rather than the CPlane point under the cursor, which is
+        # nowhere near a curve standing off the plane.
+        world = self.snaps._near([obj], self.camera, px, py,
+                                 self.width(), self.height(), radius_px=12)
+        if world is None:
+            world = self.world_point_at(px, py)
+        if world is None:
+            return False
+        before = [tuple(map(float, p))
+                  for p in _g.get_control_points(obj.shape)]
+        try:
+            shape = _g.insert_knot(obj.shape, tuple(world))
+        except _g.GeometryError:
+            return False
+        self.window_checkpoint("add control point")
+        self.scene.replace_shape(obj.id, shape)
+        after = [tuple(map(float, p)) for p in _g.get_control_points(shape)]
+        # the new one is the one that was not there before; the rest keep
+        # their places to within a tolerance a knot insertion never breaks
+        index = next((i for i, p in enumerate(after)
+                      if not any(np.allclose(p, q, atol=1e-7)
+                                 for q in before)), None)
+        self.cv_enabled.add(obj.id)
+        if not self.selection.is_selected(obj.id):
+            self.selection.set([obj.id])
+        if index is not None:
+            self.selection.set_subobjects([(obj.id, "cv", index)])
+        self.update()
+        return True
 
     def mousePressEvent(self, ev):
         # Whatever this click turns out to mean, it means it in the view you
