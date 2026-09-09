@@ -181,9 +181,21 @@ def make_rectangle(corner1: Point, corner2: Point) -> TopoDS_Shape:
 
 
 def make_interp_curve(points: list[Point], closed: bool = False) -> TopoDS_Shape:
-    """NURBS curve interpolated through the given points."""
+    """NURBS curve interpolated through the given points.
+
+    A point repeated straight after itself is dropped: OCCT's interpolator
+    fails outright on two coincident points, with a construction error
+    for a message, and a script or a snapped double-click should not lose
+    the whole curve to it.
+    """
+    kept: list = []
+    for p in points:
+        if kept and all(abs(a - b) < 1e-9 for a, b in zip(p, kept[-1])):
+            continue
+        kept.append(p)
+    points = kept
     if len(points) < 2:
-        raise GeometryError("Curve needs at least 2 points")
+        raise GeometryError("Curve needs at least 2 distinct points")
     arr = TColgp_HArray1OfPnt(1, len(points))
     for i, p in enumerate(points, start=1):
         arr.SetValue(i, _pnt(p))
