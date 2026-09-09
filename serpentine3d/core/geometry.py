@@ -2058,6 +2058,11 @@ def _control_point_map(shape) -> tuple:
 
 
 def get_control_points(shape) -> list[Point]:
+    from .picture import PictureShape
+    if isinstance(shape, PictureShape):
+        # a picture's handles are the corners of the window it shows;
+        # dragging one crops (core/picture.py)
+        return [tuple(float(c) for c in p) for p in shape.corners()]
     return _control_point_map(shape)[1]
 
 
@@ -2143,6 +2148,9 @@ def _curve_from_splines(splines) -> TopoDS_Shape:
 
 def move_control_point(shape, index: int, new_point: Point) -> TopoDS_Shape:
     """Return a new curve with control point `index` (0-based) moved."""
+    from .picture import PictureShape
+    if isinstance(shape, PictureShape):
+        return shape.with_corner_at(index, new_point)
     splines, pts, owners = _control_point_map(shape)
     if not (0 <= index < len(pts)):
         raise GeometryError(f"Control point index {index} out of range")
@@ -2901,7 +2909,10 @@ def shape_kind(shape) -> str:
     Compounds are classified by their contents when uniform: a compound of
     solids behaves as a solid, of curves as a curve, and so on."""
     from .mesh import MeshShape
+    from .picture import PictureShape
     from .pointcloud import PointCloudShape
+    if isinstance(shape, PictureShape):
+        return "picture"
     if isinstance(shape, MeshShape):
         return "mesh"
     if isinstance(shape, PointCloudShape):
@@ -3006,11 +3017,18 @@ _MESH_TAG = b"SMSH\x01"
 # A point cloud the same way, for the clipboard, the journal and undo: the
 # .serp file itself keeps clouds as raw blobs (fileio/native.py), not this.
 _CLOUD_TAG = b"SPCL\x01"
+# A picture is its placement and its path, not its pixels: the file stays
+# where it is, as a reference image does in every modeller.
+_PICTURE_TAG = b"SPIC\x01"
 
 
 def shape_to_bytes(shape) -> bytes:
     from .mesh import MeshShape
+    from .picture import PictureShape
     from .pointcloud import PointCloudShape
+    if isinstance(shape, PictureShape):
+        import json
+        return _PICTURE_TAG + json.dumps(shape.to_json()).encode("utf-8")
     if isinstance(shape, PointCloudShape):
         return _CLOUD_TAG + _cloud_pack(shape)
     if isinstance(shape, MeshShape):
@@ -3067,6 +3085,11 @@ def _cloud_unpack(data: bytes, offset: int):
 
 
 def shape_from_bytes(data: bytes):
+    if data[:len(_PICTURE_TAG)] == _PICTURE_TAG:
+        import json
+        from .picture import PictureShape
+        return PictureShape.from_json(
+            json.loads(data[len(_PICTURE_TAG):].decode("utf-8")))
     if data[:len(_CLOUD_TAG)] == _CLOUD_TAG:
         return _cloud_unpack(data, len(_CLOUD_TAG))
     if data[:len(_MESH_TAG)] == _MESH_TAG:

@@ -90,7 +90,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `perspective` (`persp`) | Perspective |
 | `pictureframe` (`picture`) | Place a reference image in the model (trace over photos/plans). |
 | `pointsoff` (`pf`) | Pointsoff |
-| `pointson` (`po`) | Show control points for selected curves and surfaces (F10). |
+| `pointson` (`po`) | Show control points for selected curves, surfaces and pictures (F10). |
 | `printcheck` (`printinfo`) | Check selected objects for 3D-print readiness: watertight, manifold, |
 | `radius` | Radius of curvature of a curve at a picked point. |
 | `redoview` | Go forward again through the views `undoview` stepped back through. |
@@ -235,6 +235,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `sellast` | Sellast |
 | `sellayer` | Sellayer |
 | `selname` | Select objects whose name contains the given text. |
+| `selpicture` (`selpictures`, `selpic`) | Select every picture (reference image) in the model. |
 | `selprev` | Restore the previous selection. |
 | `selpt` (`selpoints`) | Selpt |
 | `selsolid` (`selsolids`) | Selsolid |

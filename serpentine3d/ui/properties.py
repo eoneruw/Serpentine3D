@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import os
+
+import numpy as np
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QHBoxLayout, QPushButton,
     QComboBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout, QWidget,
 )
 
@@ -78,6 +83,31 @@ class PropertiesPanel(QWidget):
         self.measure_label = QLabel("—")
         self.measure_label.setWordWrap(True)
 
+        # a picture only: how see-through it is, and its crop. The crop
+        # corners are control points (F10 shows them; drag to frame), so
+        # the buttons here are the same switch and a way back to whole.
+        from PySide6.QtWidgets import QSlider
+        self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
+        self.opacity_slider.setRange(5, 100)
+        self.opacity_slider.setToolTip("How see-through the picture is")
+        self.opacity_slider.valueChanged.connect(self._change_opacity)
+        self.crop_btn = QPushButton("Crop corners")
+        self.crop_btn.setCheckable(True)
+        self.crop_btn.setToolTip("Show the corners of the shown window; "
+                                 "drag them to frame the part you want "
+                                 "(F10 / F11 do the same)")
+        self.crop_btn.toggled.connect(self._toggle_crop_handles)
+        self.crop_reset = QPushButton("Whole image")
+        self.crop_reset.setToolTip("Show the whole image again")
+        self.crop_reset.clicked.connect(self._reset_crop)
+        crop_row = QHBoxLayout()
+        crop_row.setContentsMargins(0, 0, 0, 0)
+        crop_row.addWidget(self.crop_btn)
+        crop_row.addWidget(self.crop_reset)
+        crop_row.addStretch(1)
+        self.crop_widget = QWidget()
+        self.crop_widget.setLayout(crop_row)
+
         self.form = form = QFormLayout()
         form.setContentsMargins(8, 4, 8, 8)
         form.setSpacing(6)
@@ -89,6 +119,8 @@ class PropertiesPanel(QWidget):
         form.addRow("Scale", self.scale_combo)
         form.addRow("Type", self.kind_label)
         form.addRow("Info", self.measure_label)
+        form.addRow("Opacity", self.opacity_slider)
+        form.addRow("Crop", self.crop_widget)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -177,6 +209,10 @@ class PropertiesPanel(QWidget):
         self.form.setRowVisible(self.linetype_combo, paper)
         self.form.setRowVisible(self.lineweight_edit, paper)
         self.form.setRowVisible(self.scale_combo, detail)
+        obj = None if (paper or detail) else self._selected()
+        picture = obj is not None and obj.kind == "picture"
+        self.form.setRowVisible(self.opacity_slider, picture)
+        self.form.setRowVisible(self.crop_widget, picture)
         self.color_reset.setText("By sheet" if paper else "By layer")
         self.color_reset.setToolTip(
             "Remove the override, use the sheet's ink" if paper
@@ -208,6 +244,8 @@ class PropertiesPanel(QWidget):
             self.kind_label.setText("Point cloud" if obj.kind == "pointcloud"
                                     else obj.kind.capitalize())
             self.measure_label.setText(self._measures(obj))
+            if obj.kind == "picture":
+                self._show_picture(obj)
             self.color_widget.setEnabled(True)
             self._show_swatch(self._ink_of(obj))
             self.color_reset.setEnabled(obj.color is not None)
@@ -327,10 +365,63 @@ class PropertiesPanel(QWidget):
             self.history.checkpoint("object colour")
             self.scene.update(obj.id, color=None)
 
+    # ---------------------------------------------------------- pictures
+
+    def _show_picture(self, obj):
+        m = obj.material or {}
+        self._updating = True
+        try:
+            self.opacity_slider.setValue(
+                int(round(float(m.get("opacity", 1.0)) * 100)))
+            vp = self._viewport_source() if self._viewport_source else None
+            shown = vp is not None and obj.id in vp.cv_enabled
+            self.crop_btn.setChecked(shown)
+            self.crop_reset.setEnabled(tuple(obj.shape.crop) != (0, 0, 1, 1))
+        finally:
+            self._updating = False
+
+    def _change_opacity(self, value: int):
+        obj = self._selected()
+        if self._updating or obj is None or obj.kind != "picture":
+            return
+        mat = dict(obj.material or {})
+        mat["opacity"] = max(0.05, min(1.0, value / 100.0))
+        self.history.checkpoint("picture opacity")
+        self.scene.update(obj.id, material=mat)
+
+    def _toggle_crop_handles(self, on: bool):
+        obj = self._selected()
+        vp = self._viewport_source() if self._viewport_source else None
+        if self._updating or obj is None or vp is None:
+            return
+        if on:
+            vp.cv_enabled.add(obj.id)
+        else:
+            vp.cv_enabled.discard(obj.id)
+        win = vp.window()
+        for pane in (win.all_viewports() if hasattr(win, "all_viewports")
+                     else [vp]):
+            pane.update()
+
+    def _reset_crop(self):
+        obj = self._selected()
+        if obj is None or obj.kind != "picture":
+            return
+        self.history.checkpoint("whole picture")
+        self.scene.replace_shape(obj.id, obj.shape.with_crop((0, 0, 1, 1)))
+
     def _measures(self, obj) -> str:
         fmt = self.scene.format_length
         u = self.scene.units
         try:
+            if obj.kind == "picture":
+                sh = obj.shape
+                w, h = (np.linalg.norm(sh.u) * (sh.crop[2] - sh.crop[0]),
+                        np.linalg.norm(sh.v) * (sh.crop[3] - sh.crop[1]))
+                px = (f"{sh.size_px[0]}×{sh.size_px[1]} px, "
+                      if sh.size_px else "")
+                return (f"{px}{fmt(w)} × {fmt(h)} shown\n"
+                        f"{os.path.basename(sh.path)}")
             if obj.kind == "curve":
                 return f"Length: {fmt(g.curve_length(obj.shape))}"
             if obj.kind == "surface":
