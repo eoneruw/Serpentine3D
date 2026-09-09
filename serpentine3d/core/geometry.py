@@ -2803,6 +2803,19 @@ def _gtransform(shape, gtrsf) -> TopoDS_Shape:
     triangulation (from a prior tessellation) silently produces faces
     with NULL surfaces, and any later OCCT call on them segfaults.
     Strip the triangulation first, then reject a degenerate result."""
+    from .mesh import MeshShape
+    from .pointcloud import PointCloudShape
+    if isinstance(shape, (MeshShape, PointCloudShape)):
+        # a mesh, a scan or a picture has no BRep to hand OCCT; the
+        # matrix applies to its points directly (the gumball's scale
+        # box on a picture used to land here and raise)
+        import numpy as np
+        v = gtrsf.VectorialPart()
+        t = gtrsf.TranslationPart()
+        m = np.eye(4)
+        m[:3, :3] = [[v.Value(i, j) for j in (1, 2, 3)] for i in (1, 2, 3)]
+        m[:3, 3] = (t.X(), t.Y(), t.Z())
+        return shape.transformed(m)
     from OCP.BRepTools import BRepTools
     BRepTools.Clean_s(shape)
     result = BRepBuilderAPI_GTransform(shape, gtrsf, True)
