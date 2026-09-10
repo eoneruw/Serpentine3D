@@ -439,6 +439,70 @@ def cmd_pbr(ctx):
     yield from ()
 
 
+@command("environment", aliases=("env", "skybox"), mutates=False)
+def cmd_environment(ctx):
+    """The environment the PBR mode lights and reflects: Studio, Well-lit
+    studio, Sunny day, Sunset, Overcast, Warehouse, or an equirectangular
+    image of your own. Rotation turns it around the model, Exposure is
+    the camera's, Background draws it behind the model. It is saved with
+    the file. Also in the Display panel when the mode is Rendered (PBR).
+    """
+    from ..ui import ibl
+    from .base import Scrub
+    scene = ctx.scene
+    env = dict(getattr(scene, "environment", {}) or {})
+    names = ibl.environment_names()
+    labels = [ibl.environment_label(n) for n in names]
+    current = str(env.get("name", names[0]))
+    if current in names:
+        # the chip starts at the environment in use: a list option shows
+        # its first entry until it is cycled, so the current one goes first
+        labels = ([ibl.environment_label(current)]
+                  + [lb for lb in labels if lb != ibl.environment_label(current)])
+
+    def apply(name, value):
+        if name == "Environment":
+            if value in labels:
+                env["name"] = names[labels.index(value)]
+        elif name == "Rotation":
+            env["rotation"] = float(value)
+        elif name == "Exposure":
+            env["exposure"] = float(value)
+        elif name == "Background":
+            env["background"] = value == "Yes"
+        scene.environment = dict(env)
+        _redraw_all(ctx)
+
+    while True:
+        p = yield PointReq("Environment: click or drag the chips, Image for "
+                           "a picture of your own, Enter to keep",
+                           allow_empty=True, extra_options=("Image",),
+                           choices={"Environment": labels,
+                                    "Rotation": Scrub(
+                                        float(env.get("rotation", 0.0)),
+                                        0.0, 359.0, step=1.0),
+                                    "Exposure": Scrub(
+                                        float(env.get("exposure", 0.8)),
+                                        0.1, 3.0, step=0.01),
+                                    "Background": ["No", "Yes"]},
+                           on_option=apply)
+        if p == "Image":
+            path = yield TextReq("Path to an equirectangular .hdr, .png "
+                                 "or .jpg")
+            if path and path.strip():
+                env["name"] = path.strip()
+                scene.environment = dict(env)
+                _redraw_all(ctx)
+            continue
+        break
+    name = str(scene.environment.get("name", "studio"))
+    ctx.echo(f"Environment: {ibl.environment_label(name)}, rotation "
+             f"{scene.environment.get('rotation', 0):g}°, exposure "
+             f"{scene.environment.get('exposure', 0.8):g}"
+             + (", drawn behind the model" if scene.environment.get(
+                 "background") else "") + ".")
+
+
 @command("viewstats", aliases=("fps", "framestats"), mutates=False)
 def cmd_viewstats(ctx):
     """Toggle the frame statistics readout (ms, fps, objects, triangles)

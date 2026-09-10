@@ -87,7 +87,8 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `newviewport` (`newvp`, `splitview`) | Open an extra live viewport in a dockable panel — drag its title |
 | `ortho` | Toggle ortho: picked points lock to CPlane axes from the last |
 | `osnap` | Toggle one object-snap type (or All = the master switch) — |
-| `pbr` (`pbrrender`, `advancedrender`) | Physically based display: materials lit by a studio environment, |
+| `pbr` (`pbrrender`, `advancedrender`) | Physically based display: materials lit by an environment, |
+| `environment` (`env`, `skybox`) | The environment the PBR mode lights and reflects — Studio, Well-lit studio, Sunny day, Sunset, Overcast, Warehouse, or an image of your own — with Rotation, Exposure and Background; saved with the file. |
 | `perspective` (`persp`) | Perspective |
 | `pictureframe` (`picture`) | Place a reference image in the model (trace over photos/plans). |
 | `pointsoff` (`pf`) | Pointsoff |

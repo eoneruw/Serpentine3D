@@ -4,6 +4,13 @@
 
 ### Added
 
+- **Environments for the PBR mode.** One procedural studio lit
+  everything; now the Display panel (mode Rendered (PBR)) and the
+  `environment` command offer Studio, Well-lit studio, Sunny day,
+  Sunset, Overcast and Warehouse, or an equirectangular .hdr/.png/.jpg
+  of your own, each with a Rotation about the model, an Exposure, and
+  the option of being drawn behind the model. The choice is the
+  scene's — one sky however many panes — and is saved with the file.
 - **Option chips you can drag.** An option that is a number — a
   `Scrub(...)` in a request's `choices` — shows as a chip beside the
   prompt that you press and drag sideways, the value running between

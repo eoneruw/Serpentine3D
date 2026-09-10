@@ -104,7 +104,7 @@ commits a value mid-command, or repeats the last command.
 | **Array** | `array` (grid) `arraypolar` `arraypath` (along a curve) |
 | **Analysis** | `distance` `length` `area` `volume` `curvature` `zebra` `curvaturegraph` (combs) `draftanalysis` `printcheck` (3D-print readiness: watertight, thin walls, overhangs, size) |
 | **View** | `top` `front` `right` `perspective` `4view`/`1view` `zoomextents` `undoview`/`redoview` (a history for the camera, per pane) `wireframe` `shaded` `ghosted` `rendered` `technical` `grid` `snap` |
-| **Render** | `material` (Matte/Plastic/Metal/Glass/custom PBR — flows into GLB/USD export) `rendered` |
+| **Render** | `material` (Matte/Plastic/Metal/Glass/custom PBR — flows into GLB/USD export) `rendered` `pbr` `environment` (Studio, Well-lit studio, Sunny day, Sunset, Overcast, Warehouse, or your own equirectangular image — with rotation, exposure and a backdrop; also in the Display panel) |
 | **Capture** | `turntable` (clean model clip) `turntableui` (portrait story with the app UI) |
 | **Layers** | `layer` (new/current/show/hide/rename/weight/**linetype**) — or use the Layers panel |
 | **Linetypes** | `linetype` — dashed/dotted/hidden/center/… per object or ByLayer (layers carry a linetype too); dashes render in the viewport *and* in exported layout sheets (PDF/SVG) |
