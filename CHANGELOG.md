@@ -82,7 +82,9 @@
   tracebacks — to `logs/` beside a source checkout or the user data
   directory; `latest.log` points at the newest and the last ten are
   kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
-  now comes with the traceback that did it.
+  now comes with the traceback that did it, and a beach ball with
+  every thread's stack: the log dumps them when the event loop stops
+  turning for four seconds.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
