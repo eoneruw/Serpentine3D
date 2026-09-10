@@ -13,6 +13,12 @@
 
 ### Fixed
 
+- **Ctrl+Shift-clicking a mesh no longer blacks out the view.** The pick
+  held a mesh "face"; the gumball asked for the B-rep faces of a mesh
+  on every mouse move, the explorer refused with a TypeError, and with
+  every move raising the viewport stopped drawing. The topology walkers
+  now hand back nothing for a mesh, and Delete on such a pick says why
+  it cannot instead of deleting the whole mesh.
 - **Ctrl+Shift-click picks edges and faces on a Mac.** Qt hands the Mac's
   Control key over as Meta and turns Ctrl+click into a right click, so
   doing what the docs say sent a right click with Meta+Shift — an Enter,

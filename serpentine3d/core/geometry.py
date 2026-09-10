@@ -250,7 +250,17 @@ def make_control_curve(control_points: list[Point], degree: int = 3,
 
 # --- wires / joining --------------------------------------------------------
 
+def _is_brep(shape) -> bool:
+    """A TopoDS shape, as against a mesh or point cloud standing in for
+    one. The topology walkers below hand back nothing for those rather
+    than a TypeError from the explorer's constructor: a mesh has faces
+    of a kind, but none the B-rep tools can use."""
+    return isinstance(shape, TopoDS_Shape)
+
+
 def edges_of(shape) -> list:
+    if not _is_brep(shape):
+        return []
     out, seen = [], set()
     exp = TopExp_Explorer(shape, occ.EDGE)
     while exp.More():
@@ -270,6 +280,8 @@ def edges_of(shape) -> list:
 
 
 def faces_of(shape) -> list:
+    if not _is_brep(shape):
+        return []
     out = []
     exp = TopExp_Explorer(shape, occ.FACE)
     while exp.More():
@@ -2974,6 +2986,9 @@ def remove_faces(shape, indices) -> TopoDS_Shape | None:
     handed back on its own because there is nothing to sew it to.
     """
     from .occ import BRepBuilderAPI_Sewing
+    if not _is_brep(shape):
+        raise GeometryError("A mesh's faces are triangles, not surfaces — "
+                            "nothing to take out here")
     drop = set(int(i) for i in indices)
     keep = [f for i, f in enumerate(faces_of(shape)) if i not in drop]
     if not keep:
