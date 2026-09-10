@@ -45,6 +45,11 @@
 
 ### Fixed
 
+- **A surface made from a painted surface is painted the same.** Offset,
+  blend, extract, explode, split, trim and boolean split carried the
+  layer across but not the colour or material, so a red car-paint
+  panel gave grey offsets and blends. They go through the scene's
+  add_from now, and the paint comes with them.
 - **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
   Run with nothing picked it printed an instruction and ended; with two
   edges that would not take a tangent blend it raised. Both looked like

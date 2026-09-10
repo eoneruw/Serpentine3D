@@ -371,8 +371,7 @@ def cmd_extractsrf(ctx):
         obj = ctx.scene.get(obj_id)
         faces = g.faces_of(obj.shape)
         for i in sorted(set(indices)):
-            made.append(ctx.scene.add(g.copy_shape(faces[i]),
-                                      layer_id=obj.layer_id))
+            made.append(ctx.scene.add_from(g.copy_shape(faces[i]), obj))
         if copy == "Yes":
             continue
         rest = g.remove_faces(obj.shape, indices)
@@ -517,7 +516,7 @@ def cmd_blendsrf(ctx):
         shape, how = g.blend_surfaces_somehow(fa, ea, fb, eb)
         if how == "G1":
             how = ""
-    obj = ctx.scene.add(shape, layer_id=oa.layer_id)
+    obj = ctx.scene.add_from(shape, oa)
     ctx.select_result([obj])
     if how:
         ctx.echo(f"Created blend {obj.name} between {oa.name} and "

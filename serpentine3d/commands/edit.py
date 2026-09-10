@@ -263,7 +263,7 @@ def cmd_explode(ctx):
             ctx.echo(f"{o.name} cannot be exploded further.")
             continue
         for p in parts:
-            ctx.scene.add(p, layer_id=o.layer_id)
+            ctx.scene.add_from(p, o)
         ctx.scene.remove(o.id)
         total += len(parts)
     if total:
@@ -281,7 +281,7 @@ def cmd_split(ctx):
     pieces = g.split_shape(target.shape, [c.shape for c in cutters],
                            direction=tuple(ctx.cplane.normal))
     for p in pieces:
-        ctx.scene.add(p, layer_id=target.layer_id)
+        ctx.scene.add_from(p, target)
     ctx.scene.remove(target.id)
     ctx.echo(f"Split {target.name} into {len(pieces)} pieces.")
 
@@ -295,7 +295,7 @@ def cmd_trim(ctx):
     target = targets[0]
     pieces = g.split_shape(target.shape, [c.shape for c in cutters],
                            direction=tuple(ctx.cplane.normal))
-    added = [ctx.scene.add(p, layer_id=target.layer_id) for p in pieces]
+    added = [ctx.scene.add_from(p, target) for p in pieces]
     ctx.scene.remove(target.id)
     doomed = yield SelectReq(
         "Select the piece(s) to trim away", allow_preselected=False)

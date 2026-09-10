@@ -353,7 +353,7 @@ def cmd_booleansplit(ctx):
             ctx.echo(f"{t.name}: {exc}")
             continue
         for p in pieces:
-            made.append(ctx.scene.add(p, layer_id=t.layer_id))
+            made.append(ctx.scene.add_from(p, t))
         ctx.scene.remove(t.id)
     # the pieces stand in for the solid you were holding, so they are what
     # you are holding now and the gumball comes to them
