@@ -100,6 +100,28 @@ def test_a_weighted_surface_is_fitted_not_refused():
     assert dev < 0.2
 
 
+def test_a_heavily_weighted_surface_does_not_grow_spikes():
+    """The fit's rows were sampled by arc length point by point, and on
+    a rational isocurve (Weight 15 on the middle column, as on the
+    reporter's blend) that handed back parameters off the end of the
+    curve: the surface fitted through them was spikes."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    a = _bonnet()
+    bs, _ = g._face_bspline_surface(a)
+    for i in range(1, bs.NbUPoles() + 1):
+        bs.SetWeight(i, 2, 15.0)
+    heavy = BRepBuilderAPI_MakeFace(bs, 1e-6).Face()
+    b = _continuation(heavy, (0.0, 0.3, 1.0))
+    face, exact, dev = g.merge_surfaces(heavy, b)
+    assert not exact
+    (lo, hi) = g.bbox(g.make_compound([heavy, b]))
+    poles = np.asarray(g.surface_control_points(face)[0])
+    reach = max(float((lo - poles.min(axis=0)).max()),
+                float((poles.max(axis=0) - hi).max()))
+    assert reach < 5.0, reach                 # no handle far off the model
+    assert dev < 3.0     # the two edges only roughly agree here; no spikes
+
+
 # -- the command --
 
 def _run(scene, text, *answers):
