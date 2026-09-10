@@ -1952,6 +1952,12 @@ class Viewport(QOpenGLWidget):
         GL.glUniformMatrix4fv(self._uloc(self._tex_prog, "uMVP"), 1,
                               GL.GL_TRUE, mvp)
         GL.glActiveTexture(GL.GL_TEXTURE0)
+        # Unit 0 is shared: a display mode lit by an environment map keeps
+        # it bound there for the whole frame, and the objects drawn after
+        # this picture would otherwise reflect the blueprint instead of
+        # the sky — coming and going as the draw order changed with the
+        # view. Put back whatever was there.
+        was_bound = int(GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D))
         GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
         GL.glUniform1i(self._uloc(self._tex_prog, "uTex"), 0)
         GL.glBindVertexArray(self._tex_vao)
@@ -1974,6 +1980,7 @@ class Viewport(QOpenGLWidget):
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, 6)
             GL.glDepthMask(True)
         GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, was_bound)
 
     def _draw_image_planes(self, mvp):
         planes = getattr(self.scene, "image_planes", [])
