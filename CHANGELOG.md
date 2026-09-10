@@ -4,6 +4,12 @@
 
 ### Added
 
+- **`weight` pulls a curve or surface toward its control points.**
+  Rhino's Weight: hold one or more control points, run it, and drag
+  the Weight chip — above 1 the shape tightens in toward the point,
+  high enough and the turn is nearly a kink with no knot added; below
+  1 it goes soft. The shape follows the drag; Enter keeps it, Escape
+  puts it back. The points stay where they are.
 - **Option chips you can drag.** An option that is a number — a
   `Scrub(...)` in a request's `choices` — shows as a chip beside the
   prompt that you press and drag sideways, the value running between

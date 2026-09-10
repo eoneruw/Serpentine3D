@@ -2,7 +2,7 @@
 
 from ..core import geometry as g
 from .base import (
-    NumberReq, OptionReq, PointReq, SelectReq, TextReq, command)
+    NumberReq, OptionReq, PointReq, Scrub, SelectReq, TextReq, command)
 
 
 def _delete_held_points(ctx) -> bool:
@@ -453,6 +453,83 @@ def cmd_removecontrolpoint(ctx):
         ctx.echo("No control points are held — turn them on with F10 or "
                  "`pointson`, then click the ones to remove.")
     yield from ()
+
+
+@command("weight")
+def cmd_weight(ctx):
+    """Pull a curve or surface toward its held control points, by weight.
+
+    Rhino's Weight. Hold one or more control points (F10 or `pointson`,
+    then click them), run it, and drag the Weight chip: above 1 the
+    curve tightens in toward the point — high enough and the turn is
+    nearly a kink, with no knot added — and below 1 it drifts away and
+    the turn goes soft. The shape follows the drag; Enter keeps it,
+    Escape puts it back.
+    """
+    held = [(oid, i) for (oid, kind, i) in ctx.selection.subobjects
+            if kind == "cv"]
+    if not held:
+        objs = yield SelectReq("Select a curve or surface, then click the "
+                               "control points to weight, then Enter",
+                               kinds=("curve", "surface"), min_count=0)
+        _show_points(ctx, [o.id for o in objs])
+        if objs and not any(k == "cv" for (_, k, _)
+                            in ctx.selection.subobjects):
+            yield SelectReq("Click the control points to weight, then "
+                            "Enter", min_count=0, allow_preselected=False)
+        held = [(oid, i) for (oid, kind, i) in ctx.selection.subobjects
+                if kind == "cv"]
+    if not held:
+        ctx.echo("No control points are held — turn them on with F10 or "
+                 "`pointson`, click the ones to pull toward, and run "
+                 "Weight again.")
+        return
+    by_obj: dict = {}
+    for oid, i in held:
+        by_obj.setdefault(oid, []).append(i)
+    originals = {oid: ctx.scene.get(oid).shape for oid in by_obj
+                 if ctx.scene.get(oid) is not None}
+    if not originals:
+        return
+    first_oid, first_idx = next(iter(by_obj.items()))
+    try:
+        current = g.control_point_weight(originals[first_oid], first_idx[0])
+    except g.GeometryError as exc:
+        ctx.echo(f"{ctx.scene.get(first_oid).name}: {exc}")
+        return
+    state = {"weight": current}
+
+    def apply(name, value):
+        w = float(value)
+        for oid, indices in by_obj.items():
+            shape = g.set_control_point_weights(originals[oid], indices, w)
+            ctx.scene.replace_shape(oid, shape)
+        state["weight"] = w
+
+    ctx.result_subobjects = [(oid, "cv", i) for oid, i in held]
+    try:
+        while True:
+            p = yield PointReq("Weight: drag the chip, Enter to keep it",
+                               allow_empty=True, allow_number=True,
+                               choices={"Weight": Scrub(state["weight"],
+                                                        0.05, 50.0,
+                                                        step=0.02)},
+                               on_option=apply)
+            if p is None or isinstance(p, (tuple, list)):
+                break
+            if isinstance(p, (int, float)):
+                try:
+                    apply("Weight", p)
+                except g.GeometryError as exc:
+                    ctx.echo(f"Weight {p:g}: {exc}")
+    except GeneratorExit:
+        for oid, shape in originals.items():
+            if ctx.scene.get(oid) is not None:
+                ctx.scene.replace_shape(oid, shape)
+        raise
+    n = len(held)
+    ctx.echo(f"Weight {state['weight']:g} on {n} control point"
+             f"{'s' if n != 1 else ''}.")
 
 
 # --- direction ---------------------------------------------------------------
