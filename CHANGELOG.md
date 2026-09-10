@@ -27,7 +27,12 @@
   (type a number: 1 is the even S-curve, less is tauter, more bellies
   out — it ghosts as you type) and a Continuity (Tangent or Position);
   Enter keeps it, Escape takes it away. Bulge is a chip you drag and
-  the blend follows as you go; Continuity flips on a click. A pick it cannot use — an edge
+  the blend follows as you go; Continuity flips on a click; Sections
+  is a chip too, and says how many rows of control points the blend
+  has along the edge (sections + 2) — fewer to pull on by hand, more
+  to hug a wavy edge. The blend is one B-spline surface: a cubic
+  Bezier across, exactly the sections, tangent to both surfaces to
+  within thousandths of a degree at the default twelve. A pick it cannot use — an edge
   of a mesh, a face — is named as the reason before it asks for more.
 
 

@@ -3732,9 +3732,15 @@ def _cross_boundary_dirs(face, pts, tans, towards):
     return out
 
 
+#: How many sections a blend is lofted through by default: enough to
+#: follow a fair edge closely, few enough that the control rows along
+#: the blend stay a hand's width apart and can be pulled on afterwards.
+BLEND_SECTIONS = 12
+
+
 def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
                         continuity: str = "G1",
-                        sections: int = 24) -> TopoDS_Shape:
+                        sections: int = BLEND_SECTIONS) -> TopoDS_Shape:
     """A blend surface across the gap, with a bulge you can set.
 
     Rhino's BlendSrf, the adjustable part: a cubic section leaves each
@@ -3742,15 +3748,18 @@ def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
     `bulge` scales how far the two handles reach before the section
     turns for the other edge — 1 is the even S-curve, less pulls it
     taut, more makes it belly out. `continuity` "G0" drops the handles
-    and the sections run straight across. Built as a loft through the
-    sections, so the surface leaves each edge as the sampled points do;
-    on a fair edge the difference is far below tolerance.
+    and the sections run straight across. Built as a loft through
+    `sections` sections, so the surface leaves each edge as the sampled
+    points do — on a fair edge the difference is far below tolerance —
+    and the blend has `sections` + 2 rows of control points along the
+    edge (the interpolation adds one at each end): fewer to pull on by
+    hand, more to hug a wavy edge.
     """
     import math
     import numpy as np
     if bulge <= 0:
         raise GeometryError("Bulge must be positive")
-    n = max(6, int(sections))
+    n = max(3, int(sections))
     pa, ta = _edge_samples(edge_a, n)
     pb, tb = _edge_samples(edge_b, n)
     if (math.dist(pa[0], pb[0]) + math.dist(pa[-1], pb[-1])
@@ -3777,33 +3786,82 @@ def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
         raise GeometryError("The two edges cross — pick edges that face "
                             "each other")
     ruled = continuity.upper() == "G0"
-    lofter = BRepOffsetAPI_ThruSections(False, ruled, tol() * 0.01)
-    if first > 0:
-        lofter.AddVertex(BRepBuilderAPI_MakeVertex(
-            gp_Pnt(*map(float, stations[0][0]))).Vertex())
-    for p0, p3, d0, d3 in stations[first:last + 1]:
+    # Four rows of points along the gap — the ends of every section and
+    # its two handles — each interpolated along the edge at the same
+    # parameters, so the four curves share a knot vector and stack into
+    # one B-spline surface: cubic Bezier across (exactly the sections,
+    # tangent where they are tangent), and along, one row of control
+    # points per section plus the two the interpolation adds.
+    rows: list = [[], [], [], []]
+    for p0, p3, d0, d3 in stations:
         gap = np.linalg.norm(p3 - p0)
         if ruled:
-            poles = [p0, p3]
+            q = (p0, p0 + (p3 - p0) / 3.0, p0 + (p3 - p0) * 2.0 / 3.0, p3)
         else:
             h = bulge * gap / 3.0
-            poles = [p0, p0 + d0 * h, p3 + d3 * h, p3]
-        arr = TColgp_Array1OfPnt(1, len(poles))
-        for i, q in enumerate(poles):
-            arr.SetValue(i + 1, gp_Pnt(*map(float, q)))
-        edge = BRepBuilderAPI_MakeEdge(Geom_BezierCurve(arr)).Edge()
-        lofter.AddWire(BRepBuilderAPI_MakeWire(edge).Wire())
-    if last < len(stations) - 1:
-        lofter.AddVertex(BRepBuilderAPI_MakeVertex(
-            gp_Pnt(*map(float, stations[-1][0]))).Vertex())
+            q = (p0, p0 + d0 * h, p3 + d3 * h, p3)
+        for row, point in zip(rows, q):
+            row.append(point)
+    params = list(np.linspace(0.0, 1.0, len(stations)))
     try:
-        lofter.Build()
-        ok = lofter.IsDone()
+        curves = [_interpolated_row(row, params) for row in rows]
+        surf = _surface_through_rows(curves)
+        mk = BRepBuilderAPI_MakeFace(surf, tol())
+        ok = mk.IsDone()
     except Exception:                                      # noqa: BLE001
         ok = False
     if not ok:
         raise GeometryError("Blend failed between these edges")
-    return lofter.Shape()
+    return mk.Face()
+
+
+def _interpolated_row(points, params):
+    """A cubic B-spline through `points` at the given parameters."""
+    from OCP.GeomAPI import GeomAPI_Interpolate
+    from OCP.TColgp import TColgp_HArray1OfPnt
+    from OCP.TColStd import TColStd_HArray1OfReal
+    pts = TColgp_HArray1OfPnt(1, len(points))
+    for i, p in enumerate(points, 1):
+        pts.SetValue(i, gp_Pnt(*map(float, p)))
+    prm = TColStd_HArray1OfReal(1, len(points))
+    for i, t in enumerate(params, 1):
+        prm.SetValue(i, float(t))
+    it = GeomAPI_Interpolate(pts, prm, False, 1e-9)
+    it.Perform()
+    if not it.IsDone():
+        raise GeometryError("Could not run a curve along the edge")
+    return it.Curve()
+
+
+def _surface_through_rows(curves):
+    """The B-spline surface whose isocurves in one direction are these
+    curves (sharing a knot vector) and in the other a Bezier through
+    their poles: degree len(curves)-1 across."""
+    from OCP.Geom import Geom_BSplineSurface
+    from OCP.TColgp import TColgp_Array2OfPnt
+    from OCP.TColStd import TColStd_Array1OfInteger, TColStd_Array1OfReal
+    first = curves[0]
+    n = first.NbPoles()
+    if any(c.NbPoles() != n or c.NbKnots() != first.NbKnots()
+           for c in curves):
+        raise GeometryError("The rows do not line up")
+    m = len(curves)
+    poles = TColgp_Array2OfPnt(1, n, 1, m)
+    for j, c in enumerate(curves, 1):
+        for i in range(1, n + 1):
+            poles.SetValue(i, j, c.Pole(i))
+    uk = TColStd_Array1OfReal(1, first.NbKnots())
+    um = TColStd_Array1OfInteger(1, first.NbKnots())
+    for k in range(1, first.NbKnots() + 1):
+        uk.SetValue(k, first.Knot(k))
+        um.SetValue(k, first.Multiplicity(k))
+    vk = TColStd_Array1OfReal(1, 2)
+    vk.SetValue(1, 0.0)
+    vk.SetValue(2, 1.0)
+    vm = TColStd_Array1OfInteger(1, 2)
+    vm.SetValue(1, m)
+    vm.SetValue(2, m)
+    return Geom_BSplineSurface(poles, uk, vk, um, vm, first.Degree(), m - 1)
 
 
 def blend_surfaces_somehow(face_a, edge_a, face_b, edge_b):
