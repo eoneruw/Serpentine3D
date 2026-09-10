@@ -119,12 +119,84 @@ class _EchoView(QPlainTextEdit):
         return hint
 
 
+class ScrubChip(QPushButton):
+    """An option chip for a number: drag it sideways to run the value.
+
+    A list option cycles on a click; a number has nowhere to cycle to,
+    so its chip is a slider laid flat — press, drag right for more and
+    left for less, `step` per pixel, and let go. `scrubbed` fires on
+    every move with final=False and once on release with final=True,
+    so the command can rebuild as you drag and the history hears of it
+    once. A click that never moved leaves the value alone. The wheel
+    nudges it a step at a time.
+    """
+
+    scrubbed = Signal(str, float, bool)     # name, value, final
+
+    def __init__(self, name: str, value: float, scrub, parent=None):
+        super().__init__(f"{name}={value:g}", parent)
+        self.name = name
+        self.value = float(value)
+        self.scrub = scrub
+        self._press_x = None
+        self._start = self.value
+        self._moved = False
+        self.setCursor(Qt.CursorShape.SizeHorCursor)
+        self.setToolTip(f"Drag left/right to change {name} "
+                        f"(or type {name}=value)")
+
+    def show_value(self, value: float):
+        self.value = float(value)
+        self.setText(f"{self.name}={self.value:g}")
+
+    def mousePressEvent(self, ev):
+        if ev.button() == Qt.MouseButton.LeftButton:
+            self._press_x = ev.position().x()
+            self._start = self.value
+            self._moved = False
+            ev.accept()
+            return
+        super().mousePressEvent(ev)
+
+    def mouseMoveEvent(self, ev):
+        if self._press_x is None:
+            return super().mouseMoveEvent(ev)
+        dx = ev.position().x() - self._press_x
+        # Shift for a finer hand, the way the nudge keys do it
+        fine = 0.1 if ev.modifiers() & Qt.KeyboardModifier.ShiftModifier \
+            else 1.0
+        value = self.scrub.clamp(self._start + dx * self.scrub.step * fine)
+        if value != self.value:
+            self._moved = True
+            self.show_value(value)
+            self.scrubbed.emit(self.name, value, False)
+
+    def mouseReleaseEvent(self, ev):
+        if self._press_x is None:
+            return super().mouseReleaseEvent(ev)
+        self._press_x = None
+        if self._moved:
+            self.scrubbed.emit(self.name, self.value, True)
+        ev.accept()
+
+    def wheelEvent(self, ev):
+        steps = ev.angleDelta().y() / 120.0
+        if not steps:
+            return
+        value = self.scrub.clamp(self.value + steps * self.scrub.step * 10)
+        if value != self.value:
+            self.show_value(value)
+            self.scrubbed.emit(self.name, value, True)
+        ev.accept()
+
+
 class CommandLine(QWidget):
     """Bottom dock: scrolling echo area + prompt + input line."""
 
     submitted = Signal(str)         # raw text the user entered
     cancelled = Signal()
     optionClicked = Signal(str)     # option chip clicked -> cycle its value
+    optionScrubbed = Signal(str, float, bool)   # a number chip dragged
     keywordClicked = Signal(str)    # keyword chip clicked -> answers prompt
     tabPressed = Signal()           # Tab while a point is wanted
 
@@ -238,28 +310,55 @@ class CommandLine(QWidget):
     def set_prompt(self, text: str):
         self.prompt_label.setText(text)
 
-    def set_options(self, chips: list):
-        """Show clickable [Name=Value] chips; click cycles the value."""
+    _CHIP_STYLE = (
+        "QPushButton { color: #d8b44a; background: #26272b;"
+        " border: 1px solid #3a3b40; border-radius: 9px;"
+        " padding: 1px 10px; }"
+        "QPushButton:hover { border-color: #d8b44a; }")
+
+    def set_options(self, chips: list, scrubs: dict | None = None):
+        """Show clickable [Name=Value] chips; click cycles the value.
+
+        `scrubs` maps the names that are numbers to their Scrub: those
+        chips drag instead of cycling. A chip already showing the
+        right text is left alone, and a scrub chip mid-drag is never
+        rebuilt under the mouse.
+        """
+        scrubs = scrubs or {}
         want = [f"{n}={v}" for n, v in chips]
-        if want == [c.text() for c in self._chips]:
+        have = [c.text() for c in self._chips]
+        if want == have:
+            return
+        if [getattr(c, "name", None) for c in self._chips] == \
+                [n for n, _ in chips]:
+            # the same options, a value moved: retitle rather than
+            # rebuild, so a chip under the mouse stays under it
+            for c, (n, v) in zip(self._chips, chips):
+                if isinstance(c, ScrubChip):
+                    if c._press_x is None:
+                        c.show_value(float(v))
+                else:
+                    c.setText(f"{n}={v}")
             return
         for c in self._chips:
             self._chip_row.removeWidget(c)
             c.deleteLater()
         self._chips = []
-        for (name, _), label in zip(chips, want):
-            chip = QPushButton(label)
+        for (name, value), label in zip(chips, want):
+            if name in scrubs:
+                chip = ScrubChip(name, float(value), scrubs[name])
+                chip.scrubbed.connect(self.optionScrubbed.emit)
+            else:
+                chip = QPushButton(label)
+                chip.name = name
+                chip.setCursor(Qt.CursorShape.PointingHandCursor)
+                chip.setToolTip(f"Click to change {name} "
+                                f"(or type {name}=value)")
+                chip.clicked.connect(
+                    lambda _=False, n=name: self.optionClicked.emit(n))
             chip.setFlat(True)
-            chip.setCursor(Qt.CursorShape.PointingHandCursor)
             chip.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-            chip.setToolTip(f"Click to change {name} (or type {name}=value)")
-            chip.setStyleSheet(
-                "QPushButton { color: #d8b44a; background: #26272b;"
-                " border: 1px solid #3a3b40; border-radius: 9px;"
-                " padding: 1px 10px; }"
-                "QPushButton:hover { border-color: #d8b44a; }")
-            chip.clicked.connect(
-                lambda _=False, n=name: self.optionClicked.emit(n))
+            chip.setStyleSheet(self._CHIP_STYLE)
             self._chip_row.addWidget(chip)
             self._chips.append(chip)
 

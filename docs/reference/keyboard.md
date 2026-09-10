@@ -130,5 +130,5 @@ Nothing is bound out of the box.
   **right-click** in the viewport is Enter as well — it runs what you've
   typed or repeats the last command. `delete` is never repeated, so a right-click after deleting
   something repeats whatever you were doing before it instead.
-- Type command options inline (`cap=n`) or click the chips under the prompt.
+- Type command options inline (`cap=n`) or click the chips under the prompt; a number chip (`Bulge=1`) drags sideways, Shift for finer steps, wheel to nudge.
 - ++f1++ opens the searchable [command reference](commands.md) inside the app.

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Option chips you can drag.** An option that is a number — a
+  `Scrub(...)` in a request's `choices` — shows as a chip beside the
+  prompt that you press and drag sideways, the value running between
+  its limits (Shift for a finer hand, wheel to nudge); a list chip
+  still cycles on a click. A request's `on_option` hears every change
+  as it happens, so a command can rebuild what it is making while you
+  look at it, and the history is told once, when you let go.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
