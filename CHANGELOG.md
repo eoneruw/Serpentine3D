@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **A surface made from a painted surface is painted the same.** Offset,
+  blend, extract, explode, split, trim and boolean split carried the
+  layer across but not the colour or material, so a red car-paint
+  panel gave grey offsets and blends. They go through the scene's
+  add_from now, and the paint comes with them.
 - **Held faces and edges of a solid move together, as one change.** Found
   through the band: a band across a box holds its faces and the edges
   between them, and `move` on that, or on four rim edges, did something

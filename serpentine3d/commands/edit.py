@@ -307,7 +307,7 @@ def cmd_explode(ctx):
             ctx.echo(f"{o.name} cannot be exploded further.")
             continue
         for p in parts:
-            ctx.scene.add(p, layer_id=o.layer_id)
+            ctx.scene.add_from(p, o)
         ctx.scene.remove(o.id)
         total += len(parts)
     if total:
@@ -315,13 +315,13 @@ def cmd_explode(ctx):
 
 
 def _add_split_piece(ctx, shape, target):
-    """Keep a picture's display attributes with each cropped region."""
+    """Each piece keeps what the whole had — layer, colour, material,
+    group — and a picture its display attributes too."""
+    obj = ctx.scene.add_from(shape, target)
     if target.kind == "picture":
-        obj = ctx.scene.add_from(shape, target)
         ctx.scene.update(obj.id, linetype=target.linetype,
                          draw_order=target.draw_order, block_id=target.block_id)
-        return obj
-    return ctx.scene.add(shape, layer_id=target.layer_id)
+    return obj
 
 
 @command("split")
