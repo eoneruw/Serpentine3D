@@ -34,6 +34,7 @@ def _isolated_session_data(tmp_path_factory):
     data = tmp_path_factory.mktemp("session_data")
     os.environ["SERP3D_JOURNAL_DIR"] = str(data / "journals")
     os.environ["SERP3D_AUTOSAVE_DIR"] = str(data / "autosave")
+    os.environ["SERP3D_LOG_DIR"] = str(data / "logs")
 
 
 @pytest.fixture(scope="session", autouse=True)

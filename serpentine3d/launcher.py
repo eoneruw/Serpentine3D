@@ -56,6 +56,11 @@ def main() -> int:
 
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
+    # The run log, before Qt and before the kernel: a launch that dies
+    # importing either is the launch someone most wants a log of.
+    from .utils import debuglog
+    debuglog.start()
+
     # Both the surface format and the share-group attribute are only read
     # as the QApplication is built, so they have to be set before one
     # exists: set the share group late and a second viewport draws
