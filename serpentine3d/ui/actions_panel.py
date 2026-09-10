@@ -44,7 +44,8 @@ NOTHING = [
 
 CURVES = [
     ("Edit curve", [("pointson", "Points On"), ("insertknot", "Insert Point"),
-                    ("removeknot", "Remove Point"), ("rebuild", "Rebuild"),
+                    ("removeknot", "Remove Point"), ("weight", "Weight"),
+                    ("rebuild", "Rebuild"),
                     ("join", "Join"), ("explode", "Explode"),
                     ("offset", "Offset"), ("fillet", "Fillet"),
                     ("extend", "Extend"), ("trim", "Trim"),
@@ -66,7 +67,7 @@ SURFACES = [
                       ("insertknot Direction Both", "Insert Both"),
                       ("removeknot", "Remove Row"),
                       ("removeknot Direction V", "Remove Column"),
-                      ("untrim", "Untrim"),
+                      ("weight", "Weight"), ("untrim", "Untrim"),
                       ("trim", "Trim"), ("split", "Split"),
                       ("join", "Join"), ("offsetsrf", "Offset"),
                       ("extendsrf", "Extend"), ("flip", "Flip"),
@@ -116,6 +117,10 @@ EDGES = [
                       ("extendsrf", "Extend Surface"),
                       ("filletedge", "Fillet Edge"),
                       ("chamferedge", "Chamfer Edge")]),
+]
+POINTS = [
+    ("Held points", [("weight", "Weight"),
+                     ("removecontrolpoint", "Remove Point")]),
 ]
 FACES = [
     ("Picked faces", [("extractsrf", "Extract Face"),
@@ -203,6 +208,9 @@ def groups_for(kinds, subkinds=(), counts=None) -> list:
             add(title, items)
     if "face" in subkinds:
         for title, items in FACES:
+            add(title, items)
+    if "cv" in subkinds:
+        for title, items in POINTS:
             add(title, items)
     if not kinds:
         if not subkinds:
