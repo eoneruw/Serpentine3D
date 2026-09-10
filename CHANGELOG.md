@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A held edge on a plain surface no longer turns the gumball into a
+  fillet handle.** The handle asked OCCT to fillet a border edge — one
+  face, nothing to round between — and OCCT raised from inside the
+  mouse handler on every pixel of the drag. The handle is offered only
+  for an edge two faces share, and a fillet that fails is a
+  GeometryError the gumball swallows, not a traceback.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
