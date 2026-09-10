@@ -22,6 +22,7 @@ from OpenGL import GL
 from PySide6.QtCore import Qt
 
 from ..core import geometry as g
+from ..core import tessellate
 from ..utils.math3d import ray_line_parameter, ray_plane_any
 
 AXIS_COLORS = ((0.86, 0.33, 0.31), (0.42, 0.72, 0.35), (0.35, 0.55, 0.92))
@@ -1290,7 +1291,18 @@ class Gumball:
             "typed": "", "armed": False, "moved": False,
         }
         vp.selection.rebuilding = self.rebuilding_id()
+        tessellate.begin_preview()          # cut coarsely while it moves
         return True
+
+    def _end_mesh_preview(self, d):
+        """The drag is over: mesh at the real quality again, and cut what
+        it moved once more if the drag's cuts were coarser."""
+        tessellate.end_preview()
+        if d is None:
+            return
+        moved = set(d["originals"]) | set((d.get("made") or {}).values())
+        if moved and tessellate.preview_is_coarser():
+            self.vp.scene.drop_meshes(moved)
 
     def drag_to(self, px, py, modifiers) -> str:
         d = self.drag
@@ -1789,6 +1801,8 @@ class Gumball:
                     self.vp.selection.set(made)
         self.vp.selection.rebuilding = None
         self.drag = None
+        if d is not None:
+            self._end_mesh_preview(d)
 
     def _clear_filleted_edges(self, d):
         """A committed fillet consumes the picked edges (their indices now
@@ -1888,6 +1902,7 @@ class Gumball:
         self.vp.window_discard_checkpoint()
         self.vp.selection.rebuilding = None
         self.drag = None
+        self._end_mesh_preview(d)
 
 
 def _frame(axis):

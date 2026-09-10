@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..core import linetype as _lt
 from ..core import spatial
+from ..core import tessellate
 from ..utils import config as _cfg
 from ..utils import units as _units
 # Lives in utils so the launcher can set it without importing this
@@ -3946,6 +3947,7 @@ class Viewport(QOpenGLWidget):
                 fwd = (self.camera.target - self.camera.position)
                 fwd = fwd / max(np.linalg.norm(fwd), 1e-12)
                 self._cv_drag = (obj_id, index, np.asarray(world), fwd)
+                tessellate.begin_preview()      # cut coarsely while it moves
                 self.cvEditBegan.emit()
                 return
             self._begin_hold(pos, ev.modifiers())
@@ -4226,9 +4228,19 @@ class Viewport(QOpenGLWidget):
             self._release_gumball(ev)
             return
         if self._cv_drag is not None:
+            moved = {self._cv_drag[0]}
             self._cv_drag = None
+            self._end_mesh_preview(moved)
+            self.update()
             return
         self._finish_pick(ev)
+
+    def _end_mesh_preview(self, moved_ids):
+        """A drag is over: mesh at the real quality again, and cut the
+        objects it moved once more if the drag's cut was coarser."""
+        tessellate.end_preview()
+        if moved_ids and tessellate.preview_is_coarser():
+            self.scene.drop_meshes(moved_ids)
 
     def _finish_swipe(self, ev) -> bool:
         """Let go of an Alt swipe: turn to face the axis, or leave it be.
