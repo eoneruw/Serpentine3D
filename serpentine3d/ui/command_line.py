@@ -67,6 +67,13 @@ class CommandInput(QLineEdit):
 
     def keyPressEvent(self, ev):
         key = ev.key()
+        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Escape,
+                   Qt.Key.Key_Tab, Qt.Key.Key_Space):
+            # the keys that answer a prompt, for the run log; what was
+            # typed reaches it as the echo, so letters are not logged
+            from ..utils import debuglog
+            debuglog.note("in", f"key {Qt.Key(key).name.removeprefix('Key_')}"
+                                "  [command line]")
         self.deleting = key in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete)
         if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             # QLineEdit fires returnPressed but leaves the event ignored;

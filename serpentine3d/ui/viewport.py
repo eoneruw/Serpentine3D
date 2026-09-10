@@ -78,6 +78,32 @@ EDGE_PICK_PX = 4.5        # a picked edge, wide enough to call feedback
 EDGE_PICK_HALO_PX = 7.0   # the dark rim under it
 
 
+def describe_input(ev, what: str) -> str:
+    """One line for the run log: which button or key, with what held,
+    where. `what` is press/release/dblclick/key/wheel."""
+    from PySide6.QtGui import QKeySequence
+    mods = ev.modifiers()
+    held = [name for flag, name in (
+        (Qt.KeyboardModifier.ShiftModifier, "Shift"),
+        (Qt.KeyboardModifier.ControlModifier, "Ctrl"),
+        (Qt.KeyboardModifier.AltModifier, "Alt"),
+        (Qt.KeyboardModifier.MetaModifier, "Meta")) if mods & flag]
+    chord = "+".join(held)
+    if what == "key":
+        key = QKeySequence(ev.key()).toString() or str(ev.key())
+        return f"key {chord + '+' if chord else ''}{key}"
+    if what == "wheel":
+        d = ev.angleDelta()
+        return f"wheel {d.y():+d} {chord}".rstrip()
+    button = {Qt.MouseButton.LeftButton: "LMB",
+              Qt.MouseButton.RightButton: "RMB",
+              Qt.MouseButton.MiddleButton: "MMB"}.get(ev.button(),
+                                                      str(ev.button()))
+    pos = ev.position()
+    return (f"{what} {chord + '+' if chord else ''}{button} "
+            f"at {pos.x():.0f},{pos.y():.0f}")
+
+
 def cv_marker_size(points, eye, width, height, half_px):
     """World half-widths that draw `half_px` pixels either side of each point.
 
@@ -1145,6 +1171,10 @@ class Viewport(QOpenGLWidget):
                 self._max_line_width = float(rng[1])
             GL.glLineWidth(1.0)
             GL.glGetError()
+            from ..utils import debuglog
+            version = GL.glGetString(GL.GL_VERSION) or b"?"
+            debuglog.note_once("gl", renderer.decode(errors="replace")
+                               + "  GL " + version.decode(errors="replace"))
         except Exception:
             pass
         GL.glEnable(GL.GL_DEPTH_TEST)
@@ -3158,6 +3188,8 @@ class Viewport(QOpenGLWidget):
     def set_display_mode(self, mode: str):
         if mode not in self.DISPLAY_MODES:
             raise ValueError(f"Unknown display mode '{mode}'")
+        from ..utils import debuglog
+        debuglog.note("view", f"display mode {mode}")
         if mode == "curvature":
             from ..core import tessellate as _tess
             if not _tess.curvature_enabled():
@@ -3850,6 +3882,7 @@ class Viewport(QOpenGLWidget):
     # ---------------------------------------------------------------- events
 
     def mouseDoubleClickEvent(self, ev):
+        self._log_input(ev, "dblclick")
         if (self.space != "model" and not self.point_mode
                 and ev.button() == Qt.MouseButton.LeftButton):
             pos = ev.position()
@@ -3858,10 +3891,17 @@ class Viewport(QOpenGLWidget):
             return
         super().mouseDoubleClickEvent(ev)
 
+    def _log_input(self, ev, what: str):
+        from ..utils import debuglog
+        if debuglog.current() is not None:
+            debuglog.note("in", f"{describe_input(ev, what)}  "
+                                f"[{getattr(self, '_view_name', '?')}]")
+
     def mousePressEvent(self, ev):
         # Whatever this click turns out to mean, it means it in the view you
         # asked for: two quick swipes are two quarter turns, not one and a
         # bit of whatever the animation had reached.
+        self._log_input(ev, "press")
         self.land_flight()
         self._last_mouse = ev.position()
         if ev.button() == Qt.MouseButton.RightButton:
@@ -4181,6 +4221,7 @@ class Viewport(QOpenGLWidget):
         return True
 
     def mouseReleaseEvent(self, ev):
+        self._log_input(ev, "release")
         self._hold_timer.stop()
         if self._finish_swipe(ev):
             return
@@ -4759,6 +4800,7 @@ class Viewport(QOpenGLWidget):
         return super().event(ev)
 
     def keyPressEvent(self, ev):
+        self._log_input(ev, "key")
         # while a gumball drag is live, type an exact distance/angle/factor
         gb = self._live_gumball()
         if gb.drag is not None:

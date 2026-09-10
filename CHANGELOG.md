@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **A rolling run log.** Every launch writes a log of itself — machine
+  and driver, files opened, every command-line echo, what was selected
+  when, mouse buttons and keys in the viewport, Qt warnings and Python
+  tracebacks — to `logs/` beside a source checkout or the user data
+  directory; `latest.log` points at the newest and the last ten are
+  kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
+  now comes with the traceback that did it.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed

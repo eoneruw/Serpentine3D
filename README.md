@@ -351,6 +351,19 @@ menu items. See `docs/scripting.md`.
 .venv/bin/pytest            # unit tests (geometry, scene, commands, file I/O)
 ```
 
+### Reporting a bug
+
+Every run writes a log: what the machine is, what was opened, every
+line the command line echoed, what was selected when, every click and
+key in the viewport, every Qt warning and every Python traceback. From
+a source checkout it lands in `logs/` beside the code; installed, in
+the user data directory (`~/.local/share/serpentine3d/logs`, or
+`$XDG_DATA_HOME`). `latest.log` always points at the newest run, the
+last ten runs are kept, and **Help → Open Log Folder** takes you there.
+Attach the log to a bug report — a screen that went dark is usually a
+traceback in it. `SERP3D_LOG_DIR` moves the folder; `SERP3D_NO_LOG=1`
+turns it off.
+
 ## Keep the lights on
 
 Serpentine3D is free and always will be. No subscription, no licence server,

@@ -24,6 +24,7 @@ from .core.history import History
 from .core.scene import Scene
 from .core.selection import SelectionManager
 from .ui import theme
+from .utils import debuglog as _log
 from .ui.command_line import CommandLine
 from .ui.dialogs import untether
 from .ui.display_panel import DisplayPanel
@@ -227,6 +228,11 @@ class MainWindow(QMainWindow):
         self._wire_viewport(self.viewport)
         self.scene.add_listener(self._update_status)
         self.selection.add_listener(self._update_status)
+        # the run log hears what the command line says and what is held,
+        # so a crash report carries what was going on (utils/debuglog)
+        self.ctx.add_echo_listener(lambda msg: _log.note("cmd", msg))
+        self.selection.add_listener(self._log_selection)
+        _log.note("run", "main window up")
         self.scene.add_listener(self._refresh_space_tabs)
         self._refresh_space_tabs()
 
@@ -931,6 +937,8 @@ class MainWindow(QMainWindow):
 
         m_help = mb.addMenu("&Help")
         self._action(m_help, "Commands", None, self._show_commands)
+        self._action(m_help, "Open Log Folder", None, self._open_log_folder)
+        self._action(m_help, "Copy Log Path", None, self._copy_log_path)
         self._action(m_help, "Check for Updates…", None,
                      self._check_updates_manual)
         self._action(m_help, "About", None, self._about)
@@ -1399,9 +1407,39 @@ class MainWindow(QMainWindow):
         finally:
             dlg.close()
 
+    def _log_selection(self):
+        """What is held, for the run log: counts by kind, and sub-objects."""
+        if _log.current() is None:
+            return
+        kinds: dict = {}
+        for o in self.selection.objects():
+            kinds[o.kind] = kinds.get(o.kind, 0) + 1
+        subs: dict = {}
+        for (_oid, kind, _i) in getattr(self.selection, "subobjects", ()):
+            subs[kind] = subs.get(kind, 0) + 1
+        parts = [f"{n} {k}" for k, n in sorted(kinds.items())]
+        parts += [f"{n} {k}" for k, n in sorted(subs.items())]
+        _log.note("sel", ", ".join(parts) if parts else "nothing")
+
+    def _open_log_folder(self):
+        from .utils import debuglog
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+        d = debuglog.log_dir()
+        os.makedirs(d, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(d))
+
+    def _copy_log_path(self):
+        from .utils import debuglog
+        log = debuglog.current()
+        path = log.path if log is not None else debuglog.log_dir()
+        QApplication.clipboard().setText(path)
+        self.command_line.echo(f"Log path copied: {path}")
+
     def _open_path(self, path: str):
         """Open a file by path (shared by the dialog, Recent menu and the
         welcome screen)."""
+        _log.note("file", f"open {path}")
         try:
             self.history.checkpoint("open")
             self._import_showing_progress(path)
@@ -2465,7 +2503,10 @@ def run_app(app, splash=None):
     if file_assoc.should_offer(window.cfg):
         _offer_default_app(window)
     window.start_update_check()
-    return app.exec()
+    code = app.exec()
+    from .utils import debuglog
+    debuglog.stop()
+    return code
 
 
 def main():
@@ -2479,6 +2520,8 @@ def main():
     if "--selftest" in sys.argv:
         raise SystemExit(_selftest())
     signal.signal(signal.SIGINT, signal.SIG_DFL)
+    from .utils import debuglog
+    debuglog.start()
     set_default_gl_format()
     app = QApplication(sys.argv)
     return run_app(app, splash=None)
