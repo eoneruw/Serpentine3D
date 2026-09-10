@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Mesh quality.** The Display panel has a **Mesh** row — Coarse, Normal,
+  Fine, Very fine — and a `meshquality` command, remembered in settings.
+  Normal is what every mode used to get. A mirror-like reflection in
+  Rendered reads the normal between a triangle's corners, so a big
+  triangle across a gently curved bonnet showed the triangle edges as
+  creases in the highlight; Fine or Very fine cuts the panel finely enough
+  that they go. Coarse keeps a scan-heavy scene quick.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed

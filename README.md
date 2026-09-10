@@ -103,7 +103,7 @@ commits a value mid-command, or repeats the last command.
 | **Camera** | `camera` (lens mm, cinema sensors, placement, 2.39/1.85 frame guides) `units` `cplane` |
 | **Array** | `array` (grid) `arraypolar` `arraypath` (along a curve) |
 | **Analysis** | `distance` `length` `area` `volume` `curvature` `zebra` `curvaturegraph` (combs) `draftanalysis` `printcheck` (3D-print readiness: watertight, thin walls, overhangs, size) |
-| **View** | `top` `front` `right` `perspective` `4view`/`1view` `zoomextents` `undoview`/`redoview` (a history for the camera, per pane) `wireframe` `shaded` `ghosted` `rendered` `technical` `grid` `snap` |
+| **View** | `top` `front` `right` `perspective` `4view`/`1view` `zoomextents` `undoview`/`redoview` (a history for the camera, per pane) `wireframe` `shaded` `ghosted` `rendered` `technical` `meshquality` `grid` `snap` |
 | **Render** | `material` (Matte/Plastic/Metal/Glass/custom PBR — flows into GLB/USD export) `rendered` |
 | **Capture** | `turntable` (clean model clip) `turntableui` (portrait story with the app UI) |
 | **Layers** | `layer` (new/current/show/hide/rename/weight/**linetype**) — or use the Layers panel |
@@ -250,7 +250,7 @@ hand can be automated:
   (`F5 zoomextents` per line) or JSON
 - **Aliases** — custom command aliases; **imports Rhino alias exports**
   (Options → Aliases → Export) and maps known commands automatically
-- **Object Snaps** and **Display** (grid size)
+- **Object Snaps** and **Display** (grid size); the Display panel's **Mesh** row picks how finely curved surfaces are cut into triangles (Coarse/Normal/Fine/Very fine — Fine or above keeps a mirror-like Rendered reflection from showing the triangles as creases)
 
 Settings live in `~/.config/serpentine3d/settings.json`.
 
