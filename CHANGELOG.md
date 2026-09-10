@@ -82,7 +82,10 @@
   Rendered reads the normal between a triangle's corners, so a big
   triangle across a gently curved bonnet showed the triangle edges as
   creases in the highlight; Fine or Very fine cuts the panel finely enough
-  that they go. Coarse keeps a scan-heavy scene quick.
+  that they go. Coarse keeps a scan-heavy scene quick. Dragging a control
+  point or a gumball handle meshes at Normal whatever the setting — at Very
+  fine a bonnet takes over a second a cut, and the drag stopped following
+  the mouse — and what moved is cut properly again on release.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
