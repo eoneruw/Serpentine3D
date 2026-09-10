@@ -54,8 +54,14 @@ def test_a_rendered_view_does_not(vp):
 
 
 def test_every_mode_shows_edges_by_default(vp):
+    """Except the PBR render, whose outlines would hide the highlights
+    along the edges it exists to show; the panel's checkbox brings them
+    back there like anywhere else."""
     for mode in vp.DISPLAY_MODES:
         vp.set_display_mode(mode)
+        if mode == "pbr":
+            assert not vp.shows_edges()
+            continue
         assert vp.shows_edges(), f"{mode} lost its edges"
 
 
