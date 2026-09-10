@@ -26,10 +26,47 @@ Point = tuple[float, float, float]
 
 # --------------------------------------------------------------- input requests
 
+@dataclass
+class Scrub:
+    """A number as an option: a chip you drag rather than a list you cycle.
+
+    `choices={"Bulge": Scrub(1.0, 0.05, 5.0)}` shows Bulge=1 beside the
+    prompt; dragging it left and right runs the value between the
+    limits, `step` per pixel, and Bulge=2 typed still works. Read it
+    with `ctx.option("Bulge", "1")` like any option, and give the
+    request an `on_option` to hear each change as it happens.
+    """
+    default: float
+    minimum: float | None = None
+    maximum: float | None = None
+    step: float = 0.01               # per pixel of drag
+
+    def clamp(self, value: float) -> float:
+        if self.minimum is not None:
+            value = max(self.minimum, value)
+        if self.maximum is not None:
+            value = min(self.maximum, value)
+        return value
+
+    def parse(self, text: str) -> float:
+        return self.clamp(float(text))
+
+
+def option_default(values):
+    """The value an option starts at: the first of a list, a Scrub's own."""
+    if isinstance(values, Scrub):
+        return f"{values.default:g}"
+    return values[0]
+
+
 class Req:
     prompt: str = ""
-    choices: dict | None = None      # {"Cap": ["Yes","No"]} option chips
+    choices: dict | None = None      # {"Cap": ["Yes","No"]} option chips;
+                                     # a Scrub(...) value is a draggable one
     preview_fn = None                # callable(value) -> shape for ghosts
+    on_option = None                 # callable(name, value): an option
+                                     # changed while this prompt waits, for
+                                     # a command that rebuilds live
 
 
 @dataclass
@@ -52,6 +89,8 @@ class PointReq(Req):
     number_from: object = None            # (base, dir) or point-fn: '10' ->
                                           # base+10*dir / number_from(10.0)
     allow_number: bool = False            # bare number returns the float
+    on_option: object = None
+
 
 
 def frame_sides(corner, cplane):
@@ -96,6 +135,8 @@ class NumberReq(Req):
     minimum: float | None = None
     choices: dict | None = None
     preview_fn: object = None
+    on_option: object = None
+
 
 
 @dataclass
@@ -110,6 +151,8 @@ class IntReq(Req):
     minimum: int | None = None
     choices: dict | None = None
     preview_fn: object = None
+    on_option: object = None
+
 
 
 @dataclass
@@ -134,6 +177,8 @@ class SelectReq(Req):
     allow_preselected: bool = True
     choices: dict | None = None
     preview_fn: object = None
+    on_option: object = None
+
 
 
 def _kinds_phrase(kinds: tuple) -> str:
@@ -816,30 +861,52 @@ class CommandProcessor:
                     pass
         self._advance(value)
 
-    def set_option(self, name: str, value: str | None = None):
-        """Set (or cycle) a persistent option of the running command."""
+    def set_option(self, name: str, value: str | None = None,
+                   quiet: bool = False):
+        """Set (or cycle) a persistent option of the running command.
+
+        A Scrub option takes a number (clamped to its limits) and has
+        nothing to cycle. `quiet` is for a chip being dragged: the value
+        lands and the command hears of it, but the history is not told
+        a hundred times on the way — the drag's end says it once.
+        """
         req = self.request
         if req is None or not getattr(req, "choices", None):
             return False
         for opt_name, values in req.choices.items():
-            if opt_name.lower() == name.lower():
-                if value is None:            # cycle
-                    cur = self.command_options.get(opt_name, values[0])
-                    idx = (values.index(cur) + 1) % len(values) \
-                        if cur in values else 0
-                    value = values[idx]
-                else:
-                    matches = [v for v in values
-                               if v.lower().startswith(value.lower())]
-                    if not matches:
-                        return False
-                    value = matches[0]
-                self.command_options[opt_name] = value
-                if self.journal is not None:
-                    self.journal.option(opt_name, value)
+            if opt_name.lower() != name.lower():
+                continue
+            if isinstance(values, Scrub):
+                if value is None:
+                    return False
+                try:
+                    value = f"{values.parse(value):g}"
+                except (TypeError, ValueError):
+                    return False
+            elif value is None:            # cycle
+                cur = self.command_options.get(opt_name, values[0])
+                idx = (values.index(cur) + 1) % len(values) \
+                    if cur in values else 0
+                value = values[idx]
+            else:
+                matches = [v for v in values
+                           if v.lower().startswith(value.lower())]
+                if not matches:
+                    return False
+                value = matches[0]
+            self.command_options[opt_name] = value
+            if self.journal is not None and not quiet:
+                self.journal.option(opt_name, value)
+            if not quiet:
                 self.ctx.echo(f"{opt_name}={value}")
-                self._notify()
-                return True
+            hear = getattr(req, "on_option", None)
+            if hear is not None:
+                try:
+                    hear(opt_name, value)
+                except geometry.GeometryError as exc:
+                    self.ctx.echo(f"{opt_name}={value}: {exc}")
+            self._notify()
+            return True
         return False
 
     def _try_option_text(self, text: str) -> bool:
@@ -1015,8 +1082,16 @@ class CommandProcessor:
         req = self.request
         if req is None or not getattr(req, "choices", None):
             return []
-        return [(n, self.command_options.get(n, v[0]))
+        return [(n, self.command_options.get(n, option_default(v)))
                 for n, v in req.choices.items()]
+
+    def option_scrub(self, name: str):
+        """The Scrub behind an option chip, or None for a list one."""
+        req = self.request
+        if req is None or not getattr(req, "choices", None):
+            return None
+        v = req.choices.get(name)
+        return v if isinstance(v, Scrub) else None
 
     def prompt_text(self) -> str:
         if self.request is None:

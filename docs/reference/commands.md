@@ -273,7 +273,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | Command | Does |
 |---|---|
 | `blendcrv` (`blend`) | Blendcrv |
-| `blendsrf` | Blend surface across the gap between two surface edges, tangent to both; asks for the edges if none are picked, then Bulge and Continuity while you look at it. |
+| `blendsrf` | Blend surface across the gap between two surface edges, tangent to both; asks for the edges if none are picked, then Bulge (drag the chip) and Continuity (click it) while you look at it. |
 | `dupborder` | Dupborder |
 | `dupedge` | Duplicate Ctrl+Shift-picked edges as curves. |
 | `dupfaceborder` | Duplicate the border wires of Ctrl+Shift-picked faces as curves. |

@@ -4,13 +4,6 @@
 
 ### Added
 
-- **A row of control points comes off a surface.** `removeknot` takes
-  surfaces now, with a Direction (U row, V column, Both) and the
-  surface ghosted as it will be; and Delete on held surface control
-  points takes out the row or column they sit on, since a surface's
-  points come in rows and one cannot go alone. Both say how far the
-  surface moved. Delete used to answer "Not a curve" and do nothing.
-
 ### Fixed
 
 - **Ctrl+Shift-clicking a mesh no longer blacks out the view.** The pick
@@ -25,6 +18,7 @@
   and nothing picked. Meta now counts as Ctrl for sub-object picks and
   for holding control points, and the fabricated right click carries the
   pick when Shift is down. ⌘+Shift works as it always did.
+
 - **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
   Run with nothing picked it printed an instruction and ended; with two
   edges that would not take a tangent blend it raised. Both looked like
@@ -32,9 +26,6 @@
   to, puts the blend on screen at once, and stays open for a Bulge
   (type a number: 1 is the even S-curve, less is tauter, more bellies
   out — it ghosts as you type) and a Continuity (Tangent or Position);
-  Enter keeps it, Escape takes it away. A pick it cannot use — an edge
-  of a mesh, a face — is named as the reason before it asks for more.
-
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
