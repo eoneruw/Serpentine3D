@@ -61,9 +61,20 @@ def test_the_knot_solver_lands_a_pole_at_the_parameter():
 def test_the_ghost_is_the_row_of_handles():
     s = _curved()
     lines = g.new_control_rows_at(s, (70.0, 40.0, 10.0), "u")
-    assert len(lines) == 1
-    pts = np.asarray(g.get_control_points(lines[0]))
-    assert len(pts) == 3                            # one handle per v row
-    assert abs(pts[:, 0].mean() - 70.0) < 1.5
+    assert lines
+    rows = [np.asarray(g.get_control_points(line)) for line in lines]
+    assert all(len(r) == 3 for r in rows)          # one handle per v row
+    nearest = min(rows, key=lambda r: abs(r[:, 0].mean() - 70.0))
+    assert abs(nearest[:, 0].mean() - 70.0) < 1.5
     both = g.new_control_rows_at(s, (70.0, 40.0, 10.0), "both")
-    assert len(both) == 2
+    assert len(both) >= 2
+
+
+def test_the_ghost_shows_every_row_a_degree_lift_brings():
+    """A column into a degree-1 loft lifts it to degree 3 first: two
+    columns of its own and the one asked for. All three are ghosted,
+    so what appears on the click is what was on screen before it."""
+    rails = [g.make_polyline([(0, y, 0), (100, y, 8)]) for y in (0, 80)]
+    s = g.loft(rails)
+    lines = g.new_control_rows_at(s, (70.0, 30.0, 5.0), "u")
+    assert len(lines) == 3
