@@ -82,7 +82,12 @@
   its limits (Shift for a finer hand, wheel to nudge); a list chip
   still cycles on a click. A request's `on_option` hears every change
   as it happens, so a command can rebuild what it is making while you
-  look at it, and the history is told once, when you let go.
+  look at it, and the history is told once, when you let go. And every
+  prompt that takes a number at all — fillet radius, offset distance,
+  extrusion height, pipe radius, wall thickness, a count, an angle —
+  carries a chip of its own: drag it and the number runs into the
+  input line with the gold ghost following; Enter takes it. Nothing
+  per command, so it is there for all of them.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
