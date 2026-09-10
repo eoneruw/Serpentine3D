@@ -3,7 +3,7 @@ unroll."""
 
 from ..core import geometry as g
 from .base import (
-    NumberReq, OptionReq, PointReq, SelectReq, TextReq,
+    NumberReq, OptionReq, PointReq, Scrub, SelectReq, TextReq,
     command,
 )
 
@@ -532,42 +532,51 @@ def cmd_blendsrf(ctx):
 
 
 def _shape_the_blend(ctx, obj, build, bulge, continuity):
-    """The bulge prompt: type numbers until it looks right, Enter keeps."""
+    """The bulge prompt: drag the chip, click the other, Enter keeps.
+
+    Bulge is a chip you drag sideways and the blend follows as you go;
+    Continuity is a chip a click flips between Tangent and Position.
+    A typed number is a bulge too, and Bulge=2 the long way round.
+    """
+    state = {"bulge": bulge, "continuity": continuity}
+
+    def rebuild(name, value):
+        want = dict(state)
+        if name == "Bulge":
+            want["bulge"] = float(value)
+        else:
+            want["continuity"] = value
+        # raises GeometryError for set_option to report; the last good
+        # blend stays on screen and the state stays with it
+        shape = build(want["bulge"], want["continuity"])
+        state.update(want)
+        ctx.scene.replace_shape(obj.id, shape)
+
     def ghost(v):
         if isinstance(v, (int, float)) and v > 0:
             try:
-                return build(float(v), continuity)
+                return build(float(v), state["continuity"])
             except g.GeometryError:
                 return None
         return None
 
     while True:
-        p = yield PointReq(f"Blend: Enter to keep it, or type a bulge  "
-                           f"[Bulge={bulge:g}  Continuity={continuity}]",
+        p = yield PointReq("Blend: drag Bulge, click Continuity, Enter to "
+                           "keep it",
                            allow_empty=True, allow_number=True,
-                           extra_options=("Bulge", "Continuity"),
-                           preview_fn=ghost)
+                           choices={"Bulge": Scrub(state["bulge"], 0.05,
+                                                   5.0, step=0.01),
+                                    "Continuity": ["Tangent", "Position"]},
+                           on_option=rebuild, preview_fn=ghost)
         if p is None or isinstance(p, (tuple, list)):
             break
-        if p == "Bulge":
-            p = yield NumberReq("Bulge (1 is even; smaller is tauter)",
-                                default=bulge, minimum=0.05,
-                                preview_fn=ghost)
-        elif p == "Continuity":
-            continuity = yield OptionReq("Continuity with the surfaces",
-                                         options=["Tangent", "Position"],
-                                         default=continuity)
-            p = bulge
         if isinstance(p, (int, float)):
             if p <= 0:
                 ctx.echo("Bulge must be positive.")
                 continue
             try:
-                shape = build(float(p), continuity)
+                rebuild("Bulge", p)
             except g.GeometryError as exc:
                 ctx.echo(f"Bulge {p:g}: {exc}")
-                continue
-            bulge = float(p)
-            ctx.scene.replace_shape(obj.id, shape)
-    ctx.echo(f"Created blend {obj.name} (bulge {bulge:g}, "
-             f"{continuity.lower()}).")
+    ctx.echo(f"Created blend {obj.name} (bulge {state['bulge']:g}, "
+             f"{state['continuity'].lower()}).")
