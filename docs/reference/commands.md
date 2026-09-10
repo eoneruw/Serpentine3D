@@ -172,6 +172,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `redo` | Redo |
 | `removecontrolpoint` | Delete the control points you are holding, as Delete does. |
 | `removeknot` | Take a knot out of a curve, or a row (Direction U/V/Both) out of a surface, and say how far it moved. Delete on held surface points takes their row out too. |
+| `weight` | Pull a curve or surface toward its held control points: drag the Weight chip, above 1 tightens the turn toward the point (nearly a kink, no knot added), below 1 softens it. |
 | `rename` | Rename |
 | `selall` (`sa`) | Selall |
 | `selnone` (`sn`) | Selnone |

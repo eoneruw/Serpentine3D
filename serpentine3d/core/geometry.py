@@ -2260,6 +2260,56 @@ def _curve_from_splines(splines) -> TopoDS_Shape:
     return mk.Wire()
 
 
+def control_point_weight(shape, index: int) -> float:
+    """The weight of one control point, of a curve or a single-face
+    surface: 1 unless someone has pulled on it."""
+    if shape_kind(shape) == "surface":
+        bs, _ = _face_bspline_surface(shape)
+        nu, nv = bs.NbUPoles(), bs.NbVPoles()
+        if not (0 <= index < nu * nv):
+            raise GeometryError("Control point index out of range")
+        i, j = divmod(index, nv)
+        return float(bs.Weight(i + 1, j + 1))
+    splines, pts, owners = _control_point_map(shape)
+    if not (0 <= index < len(pts)):
+        raise GeometryError(f"Control point index {index} out of range")
+    k, i = owners[index][0]
+    return float(splines[k].Weight(i))
+
+
+def set_control_point_weights(shape, indices: list[int],
+                              weight: float) -> TopoDS_Shape:
+    """The curve or surface with these control points weighing `weight`.
+
+    Rhino's Weight. A weight above 1 pulls the curve in toward the point
+    — high enough and the turn there tightens to nearly a kink without a
+    knot being added; below 1 lets it drift away and the turn goes soft.
+    The shape becomes rational if it was not; nothing else about it
+    changes, and the points stay where they are.
+    """
+    if weight <= 0:
+        raise GeometryError("Weight must be positive")
+    if shape_kind(shape) == "surface":
+        bs, _face = _face_bspline_surface(shape)
+        nu, nv = bs.NbUPoles(), bs.NbVPoles()
+        for index in indices:
+            if not (0 <= index < nu * nv):
+                raise GeometryError("Control point index out of range")
+            i, j = divmod(index, nv)
+            bs.SetWeight(i + 1, j + 1, float(weight))
+        mk = BRepBuilderAPI_MakeFace(bs, tol())
+        if not mk.IsDone():
+            raise GeometryError("Surface rebuild failed")
+        return mk.Face()
+    splines, pts, owners = _control_point_map(shape)
+    for index in indices:
+        if not (0 <= index < len(pts)):
+            raise GeometryError(f"Control point index {index} out of range")
+        for k, i in owners[index]:
+            splines[k].SetWeight(i, float(weight))
+    return _curve_from_splines(splines)
+
+
 def move_control_point(shape, index: int, new_point: Point) -> TopoDS_Shape:
     """Return a new curve with control point `index` (0-based) moved."""
     from .picture import PictureShape
