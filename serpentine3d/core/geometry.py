@@ -4265,6 +4265,72 @@ def _merge_by_fit(fa, fb, ba, bb, tolerance: float):
     return fit.Surface()
 
 
+def _surface_sample_grid(bs, n_u: int, n_v: int):
+    """An n_u × n_v grid of points on a B-spline surface, rows along U
+    at even parameters, each row spaced evenly by arc length along its
+    isocurve."""
+    import numpy as np
+    from OCP.GCPnts import GCPnts_UniformAbscissa
+    from OCP.GeomAdaptor import GeomAdaptor_Curve
+    u0, u1, v0, v1 = bs.Bounds()
+    rows = []
+    for u in np.linspace(u0, u1, n_u):
+        iso = bs.UIso(float(u))
+        ua = GCPnts_UniformAbscissa(GeomAdaptor_Curve(iso), n_v, v0, v1)
+        if ua.IsDone() and ua.NbPoints() == n_v:
+            params = [ua.Parameter(i) for i in range(1, n_v + 1)]
+        else:
+            params = list(np.linspace(v0, v1, n_v))
+        rows.append([pnt_tuple(iso.Value(float(par))) for par in params])
+    return rows
+
+
+def rebuild_surface(shape, count_u: int, count_v: int,
+                    degree: int = 3) -> tuple:
+    """A new surface with `count_u` × `count_v` control points fitted
+    through the old one — Rhino's Rebuild on a surface. Degree 3 goes
+    through the samples exactly (an interpolation); lower degrees fit.
+    Returns (face, deviation from the original)."""
+    from OCP.GeomAbs import GeomAbs_Shape
+    from OCP.GeomAPI import GeomAPI_PointsToBSplineSurface
+    from OCP.TColgp import TColgp_Array2OfPnt
+    faces = faces_of(shape)
+    if len(faces) != 1:
+        raise GeometryError("Rebuild works on single surfaces")
+    bs, _ = _face_bspline_surface(faces[0])
+    n_u, n_v = max(int(count_u), 2), max(int(count_v), 2)
+    degree = max(1, min(int(degree), 3))
+    # a cubic interpolation through n points has n + 2 poles (the end
+    # conditions), so it is asked for two fewer to land on the count
+    interp = degree == 3 and n_u >= 5 and n_v >= 5
+    s_u, s_v = (n_u - 2, n_v - 2) if interp else (n_u, n_v)
+    grid = _surface_sample_grid(bs, s_u, s_v)
+    pts = TColgp_Array2OfPnt(1, s_u, 1, s_v)
+    for i, row in enumerate(grid, start=1):
+        for j, q in enumerate(row, start=1):
+            pts.SetValue(i, j, _pnt(q))
+    try:
+        fit = GeomAPI_PointsToBSplineSurface()
+        if interp:
+            fit.Interpolate(pts)
+        else:
+            cont = (GeomAbs_Shape.GeomAbs_C0 if degree < 2
+                    else GeomAbs_Shape.GeomAbs_C1)
+            fit.Init(pts, degree, degree, cont, 1e-4)
+        if not fit.IsDone():
+            raise GeometryError("Rebuild failed")
+        out = fit.Surface()
+    except GeometryError:
+        raise
+    except Exception as exc:                                   # noqa: BLE001
+        raise GeometryError(f"Rebuild failed: {exc}") from exc
+    mk = BRepBuilderAPI_MakeFace(out, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    face = mk.Face()
+    return face, surface_deviation(faces[0], face)
+
+
 def _is_trimmed(face) -> bool:
     """Whether a face uses less than its whole underlying surface."""
     from OCP.BRep import BRep_Tool

@@ -14,6 +14,8 @@
   older build, a two-face polysurface — and gives one surface with one
   net of control points: exactly when the two are really one surface
   cut in two, otherwise fitted through both with the deviation reported.
+  And `rebuild` takes surfaces now — a count each way and a degree —
+  which is how a dense fit comes down to a net you can pull on.
 - **Rows put into a loft bend rather than fold.** A loft between two
   curves is degree 1 across — straight between them — so rows of
   control points put into that direction and dragged made corners,

@@ -507,5 +507,7 @@ def cmd_mergesrf(ctx):
     grid = g.surface_control_points(face)[1]
     how = ("exactly" if exact
            else f"fitted, within {dev:.3g} {ctx.scene.units}")
+    dense = grid[0] * grid[1] > 80
     ctx.echo(f"Merged into one surface ({how}), {grid[0]}×{grid[1]} "
-             "control points.")
+             "control points." + (" Rebuild it to fewer for a net you "
+                                  "can pull on." if dense else ""))

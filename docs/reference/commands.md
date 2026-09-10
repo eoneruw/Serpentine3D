@@ -166,7 +166,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `material` (`mat`) | Assign a look (metallic/roughness/opacity) for rendered display |
 | `offset` | Offset |
 | `plugins` | List loaded plugins and where they came from. |
-| `rebuild` | Rebuild |
+| `rebuild` | Rebuild curves or surfaces with a chosen number of control points. |
 | `recordhistory` (`history`) | Toggle record history: loft/extrude/revolve outputs rebuild when |
 | `redo` | Redo |
 | `removecontrolpoint` | Delete the control points you are holding, as Delete does. |
