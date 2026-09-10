@@ -2651,22 +2651,34 @@ def surface_iso_lines_at(shape, point, direction: str = "u") -> list:
 def new_control_rows_at(shape, point, direction: str = "u") -> list:
     """The row(s) of control points insert_surface_knot would add through
     `point`, as polylines to ghost — the handles themselves, not the line
-    on the surface they act on, so what is shown is what appears."""
+    on the surface they act on, so what is shown is what appears.
+
+    Every row that is new is shown, not only the one asked for: a row put
+    into a degree-1 direction lifts it to degree 3 first, and that is two
+    more rows, which had better be on screen before the click.
+    """
     import numpy as np
     new = insert_surface_knot(shape, point, direction)
     pts, (nu, nv) = surface_control_points(new)
     grid = np.asarray(pts, float).reshape(nu, nv, 3)
-    target = np.asarray(point, float)
+    old_pts, (ou, ov) = surface_control_points(shape)
+    old = np.asarray(old_pts, float).reshape(ou, ov, 3)
+    (lo, hi) = bbox(shape)
+    eps = max(float(np.linalg.norm(np.subtract(hi, lo))), 1.0) * 1e-6
+
+    def unchanged(line, olds):
+        return any(len(o) == len(line)
+                   and float(np.abs(o - line).max()) < eps for o in olds)
+
     out = []
     want = direction.lower()
     if want in ("u", "both") and nu > 1:
-        rows = [grid[i] for i in range(nu)]
-        out.append(min(rows, key=lambda r: np.linalg.norm(
-            r - target, axis=1).min()))
+        olds = [old[i] for i in range(ou)]
+        out += [grid[i] for i in range(nu) if not unchanged(grid[i], olds)]
     if want in ("v", "both") and nv > 1:
-        cols = [grid[:, j] for j in range(nv)]
-        out.append(min(cols, key=lambda c: np.linalg.norm(
-            c - target, axis=1).min()))
+        olds = [old[:, j] for j in range(ov)]
+        out += [grid[:, j] for j in range(nv)
+                if not unchanged(grid[:, j], olds)]
     return [make_polyline([tuple(p) for p in line]) for line in out
             if len(line) > 1]
 
