@@ -4223,7 +4223,7 @@ def _merge_by_fit(fa, fb, ba, bb, tolerance: float):
     isocurves, so the rows meet at the seam, and a cubic surface is fitted
     to within `tolerance`."""
     import numpy as np
-    from OCP.GCPnts import GCPnts_AbscissaPoint
+    from OCP.GCPnts import GCPnts_UniformAbscissa
     from OCP.GeomAdaptor import GeomAdaptor_Curve
     from OCP.GeomAbs import GeomAbs_Shape
     from OCP.GeomAPI import GeomAPI_PointsToBSplineSurface
@@ -4236,16 +4236,17 @@ def _merge_by_fit(fa, fb, ba, bb, tolerance: float):
         for u in (us[1:] if drop_first else us):
             iso = bs.UIso(float(u))
             ad = GeomAdaptor_Curve(iso)
-            total = GCPnts_AbscissaPoint.Length_s(ad)
-            row = []
-            for t in np.linspace(0.0, 1.0, n_v):
-                if total < 1e-12:
-                    par = v0
-                else:
-                    par = GCPnts_AbscissaPoint(ad, float(t) * total,
-                                               v0).Parameter()
-                row.append(pnt_tuple(iso.Value(par)))
-            rows.append(row)
+            # evenly by arc length. (GCPnts_AbscissaPoint, point by
+            # point, hands back parameters off the end of a rational
+            # isocurve — a Weight edit makes one — and the fit through
+            # those was a surface with spikes.)
+            ua = GCPnts_UniformAbscissa(ad, n_v, v0, v1)
+            if ua.IsDone() and ua.NbPoints() == n_v:
+                params = [ua.Parameter(i) for i in range(1, n_v + 1)]
+            else:
+                params = list(np.linspace(v0, v1, n_v))
+            rows.append([pnt_tuple(iso.Value(float(par)))
+                         for par in params])
         return rows
 
     n_v = max(ba.NbVPoles(), bb.NbVPoles(), 6) * 3
