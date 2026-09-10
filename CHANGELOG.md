@@ -4,8 +4,39 @@
 
 ### Added
 
+- **A rolling run log.** Every launch writes a log of itself — machine
+  and driver, files opened, every command-line echo, what was selected
+  when, mouse buttons and keys in the viewport, Qt warnings and Python
+  tracebacks — to `logs/` beside a source checkout or the user data
+  directory; `latest.log` points at the newest and the last ten are
+  kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
+  now comes with the traceback that did it.
+- **A row of control points comes off a surface.** `removeknot` takes
+  surfaces now, with a Direction (U row, V column, Both) and the
+  surface ghosted as it will be; and Delete on held surface control
+  points takes out the row or column they sit on, since a surface's
+  points come in rows and one cannot go alone. Both say how far the
+  surface moved. Delete used to answer "Not a curve" and do nothing.
+- **Option chips you can drag.** An option that is a number — a
+  `Scrub(...)` in a request's `choices` — shows as a chip beside the
+  prompt that you press and drag sideways, the value running between
+  its limits (Shift for a finer hand, wheel to nudge); a list chip
+  still cycles on a click. A request's `on_option` hears every change
+  as it happens, so a command can rebuild what it is making while you
+  look at it, and the history is told once, when you let go.
+
 ### Fixed
 
+- **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
+  Run with nothing picked it printed an instruction and ended; with two
+  edges that would not take a tangent blend it raised. Both looked like
+  a command doing nothing. Now it prompts for the two edges when it has
+  to, puts the blend on screen at once, and stays open for a Bulge
+  (type a number: 1 is the even S-curve, less is tauter, more bellies
+  out — it ghosts as you type) and a Continuity (Tangent or Position);
+  Enter keeps it, Escape takes it away. Bulge is a chip you drag and
+  the blend follows as you go; Continuity flips on a click. A pick it cannot use — an edge
+  of a mesh, a face — is named as the reason before it asks for more.
 - **Ctrl+Shift-clicking a mesh no longer blacks out the view.** The pick
   held a mesh "face"; the gumball asked for the B-rep faces of a mesh
   on every mouse move, the explorer refused with a TypeError, and with
@@ -19,13 +50,6 @@
   for holding control points, and the fabricated right click carries the
   pick when Shift is down. ⌘+Shift works as it always did.
 
-- **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
-  Run with nothing picked it printed an instruction and ended; with two
-  edges that would not take a tangent blend it raised. Both looked like
-  a command doing nothing. Now it prompts for the two edges when it has
-  to, puts the blend on screen at once, and stays open for a Bulge
-  (type a number: 1 is the even S-curve, less is tauter, more bellies
-  out — it ghosts as you type) and a Continuity (Tangent or Position);
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
