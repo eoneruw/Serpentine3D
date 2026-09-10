@@ -907,7 +907,10 @@ class CommandProcessor:
                 try:
                     hear(opt_name, value)
                 except geometry.GeometryError as exc:
-                    self.ctx.echo(f"{opt_name}={value}: {exc}")
+                    # a drag passes through values that will not build;
+                    # the history hears about the one it lands on
+                    if not quiet:
+                        self.ctx.echo(f"{opt_name}={value}: {exc}")
             self._notify()
             return True
         return False

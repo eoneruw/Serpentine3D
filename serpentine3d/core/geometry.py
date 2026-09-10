@@ -3761,13 +3761,29 @@ def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
     from OCP.Geom import Geom_BezierCurve
     from OCP.TColgp import TColgp_Array1OfPnt
     from OCP.gp import gp_Pnt
-    profiles = []
-    for p0, p3, d0, d3 in zip(pa, pb, ca, cb):
+    # Where the two edges meet — a V of a gap, the surfaces touching at
+    # one end — the sections there have no length. A run of those at
+    # either end collapses to a single point the loft closes on, the
+    # way a triangle's apex does; one in the middle means the edges
+    # cross, and there is no surface across that.
+    stations = list(zip(pa, pb, ca, cb))
+    touching = [np.linalg.norm(p3 - p0) < tol() for p0, p3, _, _ in stations]
+    if all(touching):
+        raise GeometryError("The two edges lie on each other — nothing "
+                            "to blend across")
+    first = touching.index(False)
+    last = len(touching) - 1 - touching[::-1].index(False)
+    if any(touching[first:last + 1]):
+        raise GeometryError("The two edges cross — pick edges that face "
+                            "each other")
+    ruled = continuity.upper() == "G0"
+    lofter = BRepOffsetAPI_ThruSections(False, ruled, tol() * 0.01)
+    if first > 0:
+        lofter.AddVertex(BRepBuilderAPI_MakeVertex(
+            gp_Pnt(*map(float, stations[0][0]))).Vertex())
+    for p0, p3, d0, d3 in stations[first:last + 1]:
         gap = np.linalg.norm(p3 - p0)
-        if gap < tol():
-            raise GeometryError("The two edges touch — nothing to blend "
-                                "across")
-        if continuity.upper() == "G0":
+        if ruled:
             poles = [p0, p3]
         else:
             h = bulge * gap / 3.0
@@ -3775,12 +3791,19 @@ def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
         arr = TColgp_Array1OfPnt(1, len(poles))
         for i, q in enumerate(poles):
             arr.SetValue(i + 1, gp_Pnt(*map(float, q)))
-        curve = Geom_BezierCurve(arr)
-        profiles.append(BRepBuilderAPI_MakeEdge(curve).Edge())
+        edge = BRepBuilderAPI_MakeEdge(Geom_BezierCurve(arr)).Edge()
+        lofter.AddWire(BRepBuilderAPI_MakeWire(edge).Wire())
+    if last < len(stations) - 1:
+        lofter.AddVertex(BRepBuilderAPI_MakeVertex(
+            gp_Pnt(*map(float, stations[-1][0]))).Vertex())
     try:
-        return loft(profiles, ruled=(continuity.upper() == "G0"))
-    except GeometryError:
+        lofter.Build()
+        ok = lofter.IsDone()
+    except Exception:                                      # noqa: BLE001
+        ok = False
+    if not ok:
         raise GeometryError("Blend failed between these edges")
+    return lofter.Shape()
 
 
 def blend_surfaces_somehow(face_a, edge_a, face_b, edge_b):
