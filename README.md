@@ -115,9 +115,11 @@ commits a value mid-command, or repeats the last command.
 Most commands have Rhino-compatible aliases (`l`, `pl`, `c`, `m`, `co`, `mi`, ...).
 Command options appear as **clickable chips** under the prompt
 (`Cap=Yes`, `BothSides=No`, `Style=Normal`) and can be typed
-Rhino-style (`cap=n`) at any moment without losing your place; numeric
-prompts show a live **gold ghost preview** of the result while you
-type. `help` (or F1) opens a searchable command reference. Arrow keys
+Rhino-style (`cap=n`) at any moment without losing your place; an
+option that is a number (`Bulge=1`) is a chip you **drag** sideways,
+Shift for a finer hand, and a command that rebuilds live shows the
+result as you drag. Numeric prompts show a live **gold ghost preview**
+of the result while you type. `help` (or F1) opens a searchable command reference. Arrow keys
 nudge the selection along the CPlane (Shift ×10, Ctrl ×0.1).
 
 ### Navigation & shortcuts

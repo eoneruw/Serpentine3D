@@ -76,6 +76,13 @@
 
 ### Added
 
+- **Option chips you can drag.** An option that is a number — a
+  `Scrub(...)` in a request's `choices` — shows as a chip beside the
+  prompt that you press and drag sideways, the value running between
+  its limits (Shift for a finer hand, wheel to nudge); a list chip
+  still cycles on a click. A request's `on_option` hears every change
+  as it happens, so a command can rebuild what it is making while you
+  look at it, and the history is told once, when you let go.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
