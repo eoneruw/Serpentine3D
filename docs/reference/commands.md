@@ -282,6 +282,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `extrude` (`ext`, `extrudecrv`) | Extrude |
 | `helix` | Helix |
 | `loft` | Loft |
+| `mergesrf` (`mergesurfaces`) | Two surfaces that share an edge become one, with one net of |
 | `offsetsrf` | Offsetsrf |
 | `patch` (`networksrf`) | Patch |
 | `pipe` | Pipe |

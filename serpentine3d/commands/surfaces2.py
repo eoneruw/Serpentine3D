@@ -466,3 +466,46 @@ def cmd_blendsrf(ctx):
     ctx.echo(f"Created blend {obj.name} between "
              f"{oa.name} and {ob.name}.")
     yield from ()
+
+
+@command("mergesrf", aliases=("mergesurfaces",))
+def cmd_mergesrf(ctx):
+    """Two surfaces that share an edge become one, with one net of
+    control points.
+
+    Rhino's MergeSrf. Pick two untrimmed surfaces with an edge in common
+    — a panel and the blend against it, a surface and an extension sewn
+    on in an older build — or one two-face polysurface. Where the two are
+    really one surface cut in two they go back together exactly; where
+    their edges run alike in space but not in parameter, one surface is
+    fitted through both and how far it strays is reported. Smooth=No
+    keeps a crease at the seam.
+    """
+    objs = yield SelectReq("Select two surfaces that share an edge (or a "
+                           "two-face polysurface)", min_count=1,
+                           max_count=2, kinds=("surface",))
+    faces = []
+    for o in objs:
+        for f in g.faces_of(o.shape):
+            faces.append((o, f))
+    if len(faces) != 2:
+        ctx.echo(f"MergeSrf needs exactly two surfaces — {len(faces)} "
+                 "picked. Nothing merged.")
+        return
+    smooth = yield OptionReq("Smooth across the seam", options=["Yes", "No"],
+                             default="Yes")
+    (oa, fa), (ob, fb) = faces
+    try:
+        face, exact, dev = g.merge_surfaces(fa, fb, smooth=(smooth == "Yes"))
+    except g.GeometryError as exc:
+        ctx.echo(f"MergeSrf: {exc}")
+        return
+    if ob.id != oa.id:
+        ctx.scene.remove(ob.id)
+    new = ctx.scene.replace_shape(oa.id, face)
+    ctx.select_result([new.id])
+    grid = g.surface_control_points(face)[1]
+    how = ("exactly" if exact
+           else f"fitted, within {dev:.3g} {ctx.scene.units}")
+    ctx.echo(f"Merged into one surface ({how}), {grid[0]}×{grid[1]} "
+             "control points.")
