@@ -100,6 +100,7 @@ def save_scene(scene, path: str, thumbnail: bytes | None = None):
                  linetype=obj.linetype, draw_order=obj.draw_order,
                  annotation=obj.annotation)
             for obj in scene.all() if obj.kind == "picture"], blobs),
+        "environment": dict(getattr(scene, "environment", {}) or {}),
         "block_defs": {
             bid: {
                 "name": bd["name"],
@@ -339,6 +340,11 @@ def _load_doc(scene, doc: dict, blobs=None):
                      annotation=plane.get("annotation"),
                      linetype=plane.get("linetype", "ByLayer"),
                      draw_order=plane.get("draw_order", 0))
+    if isinstance(doc.get("environment"), dict):
+        from ..core.scene import DEFAULT_ENVIRONMENT
+        env = dict(DEFAULT_ENVIRONMENT)
+        env.update(doc["environment"])
+        scene.environment = env
     for bid, bd in doc.get("block_defs", {}).items():
         scene.block_defs[bid] = {
             "name": bd["name"],

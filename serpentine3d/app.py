@@ -600,7 +600,8 @@ class MainWindow(QMainWindow):
             dialog.close()
             dialog = None
         if dialog is None:
-            dialog = DisplaySettingsDialog(vp, self)
+            dialog = DisplaySettingsDialog(
+                vp, self, all_panes=lambda: self.all_viewports())
             self._display_settings = dialog
 
             def forget(_result):
