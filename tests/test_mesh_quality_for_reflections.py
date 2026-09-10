@@ -261,3 +261,21 @@ def test_a_gumball_drag_does_the_same(_qapp):
     gb.end_drag()
     assert tessellate._active_quality() == "very fine"
     assert not vp.scene.get(obj.id).mesh_ready, "the moved object keeps a preview mesh"
+
+
+def test_a_command_ghost_is_cut_at_preview_quality(_qapp):
+    """Extendsrf's ghost is redrawn on every mouse move; at Very fine on
+    a bonnet that was a four-second stall per move (the run log again)."""
+    tessellate.set_mesh_quality("very fine")
+    shape = _bonnet()
+    fine = _triangles(shape)
+    tessellate.set_mesh_quality("normal")
+    normal = _triangles(shape)
+    tessellate.set_mesh_quality("very fine")
+    assert len(tessellate.tessellate(shape, preview=True).triangles) == normal
+    from PySide6.QtWidgets import QApplication
+    from serpentine3d.ui.viewport import Viewport
+    scene = Scene()
+    vp = Viewport(scene, SelectionManager(scene))
+    vp.set_ghost(shape)
+    assert len(vp._ghost.triangles) == normal < fine

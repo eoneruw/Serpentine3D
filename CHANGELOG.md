@@ -85,7 +85,8 @@
   that they go. Coarse keeps a scan-heavy scene quick. Dragging a control
   point or a gumball handle meshes at Normal whatever the setting — at Very
   fine a bonnet takes over a second a cut, and the drag stopped following
-  the mouse — and what moved is cut properly again on release.
+  the mouse — as does a command's ghost preview; what moved is cut
+  properly again on release, and a result once it is made.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
