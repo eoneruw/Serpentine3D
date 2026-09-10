@@ -230,3 +230,29 @@ def test_the_chips_reshape_the_blend_as_you_drag(win):
     proc.provide_text("")
     assert not proc.busy
     assert "bulge 2, position" in said[-1]
+
+
+def test_a_v_shaped_gap_blends_to_a_point_where_the_edges_meet():
+    """Two surfaces that touch at one end and open out at the other:
+    the sections at the touching end have no length. It used to refuse
+    ("the two edges touch"); now the blend closes on that point."""
+    a = g.loft([g.make_line((0, -50, 0), (100, -50, 0)),
+                g.make_line((0, 0, 0), (100, 0, 0))])
+    b = g.loft([g.make_line((0, 0, 0), (100, 40, 0)),     # meets A at x=0
+                g.make_line((0, 50, 0), (100, 90, 0))])
+    fa, fb = g.faces_of(a)[0], g.faces_of(b)[0]
+    ea = next(e for e in g.edges_of(a)
+              if all(abs(p[1]) < 1e-6 for p in g.curve_endpoints(e)))
+    eb = next(e for e in g.edges_of(b)
+              if any(abs(p[1]) < 1e-6 for p in g.curve_endpoints(e))
+              and any(abs(p[1] - 40) < 1e-6 for p in g.curve_endpoints(e)))
+    for bulge in (0.5, 1.0, 2.0):
+        blend = g.blend_between_edges(fa, ea, fb, eb, bulge=bulge)
+        lo, hi = g.bbox(blend)
+        assert lo[0] == pytest.approx(0, abs=1e-3), "closes on the apex"
+        assert 99 < hi[0] < 110, "reaches the open end, bulge and all"
+        assert hi[1] > 30
+    ruled = g.blend_between_edges(fa, ea, fb, eb, continuity="G0")
+    assert g.surface_area(ruled) == pytest.approx(100 * 40 / 2, rel=0.02)
+    with pytest.raises(g.GeometryError, match="lie on each other"):
+        g.blend_between_edges(fa, ea, fa, ea)
