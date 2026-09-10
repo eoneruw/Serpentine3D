@@ -52,6 +52,13 @@
   points come in rows and one cannot go alone. Both say how far the
   surface moved. Delete used to answer "Not a curve" and do nothing.
 
+### Changed
+
+- **The word Osnap is the switch.** The bar had a label and, beside it,
+  an "On" button that read as one more snap type. Now the word itself
+  is a button: click it and every snap is paused, the type buttons
+  greyed but keeping their settings; click again and it is all back.
+
 ### Fixed
 
 - **A surface made from a painted surface is painted the same.** Offset,
