@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The word Osnap is the switch.** The bar had a label and, beside it,
+  an "On" button that read as one more snap type. Now the word itself
+  is a button: click it and every snap is paused, the type buttons
+  greyed but keeping their settings; click again and it is all back.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
