@@ -2885,7 +2885,9 @@ class Viewport(QOpenGLWidget):
             return
         try:
             from ..core.tessellate import tessellate
-            self._ghost = tessellate(shape)
+            # A ghost is redrawn on every mouse move, so it is cut at no
+            # finer than Normal; the result is cut properly once it is made.
+            self._ghost = tessellate(shape, preview=True)
         except Exception:                                  # noqa: BLE001
             self._ghost = None
         self.update()
