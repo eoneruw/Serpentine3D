@@ -158,20 +158,26 @@ def mesh_quality() -> str:
 # mouse. So a drag meshes at Normal — what every drag got before there
 # was a setting — and the real quality comes back on release, when the
 # objects that moved are cut once more, properly.
-_PREVIEW = 0
+_PREVIEW = False
 _PREVIEW_QUALITY = "normal"
 _ORDER = list(MESH_QUALITIES)
 
 
 def begin_preview():
-    """Mesh at no finer than Normal until the matching end_preview()."""
+    """Mesh at no finer than Normal until end_preview(). A flag, not a
+    count: a drag that starts on top of another (a handle taken while one
+    is still armed) must not leave the preview stuck on for good."""
     global _PREVIEW
-    _PREVIEW += 1
+    _PREVIEW = True
 
 
 def end_preview():
     global _PREVIEW
-    _PREVIEW = max(0, _PREVIEW - 1)
+    _PREVIEW = False
+
+
+def previewing() -> bool:
+    return _PREVIEW
 
 
 def preview_is_coarser() -> bool:

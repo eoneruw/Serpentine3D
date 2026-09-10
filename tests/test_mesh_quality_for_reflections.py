@@ -23,7 +23,9 @@ from serpentine3d.core.selection import SelectionManager
 
 @pytest.fixture(autouse=True)
 def _normal_again():
+    tessellate.end_preview()        # whatever an earlier test left held
     yield
+    tessellate.end_preview()
     tessellate.set_mesh_quality("normal")
 
 
