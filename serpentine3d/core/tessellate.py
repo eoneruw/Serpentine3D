@@ -186,16 +186,16 @@ def preview_is_coarser() -> bool:
     return _ORDER.index(_QUALITY) > _ORDER.index(_PREVIEW_QUALITY)
 
 
-def _active_quality() -> str:
-    if _PREVIEW and preview_is_coarser():
+def _active_quality(preview: bool = False) -> str:
+    if (preview or _PREVIEW) and preview_is_coarser():
         return _PREVIEW_QUALITY
     return _QUALITY
 
 
-def _deflection_for(shape) -> float:
+def _deflection_for(shape, preview: bool = False) -> float:
     (mn, mx) = geometry.bbox(shape)
     diag = float(np.linalg.norm(np.subtract(mx, mn)))
-    return max(diag * MESH_QUALITIES[_active_quality()][0], 1e-4)
+    return max(diag * MESH_QUALITIES[_active_quality(preview)][0], 1e-4)
 
 
 def _meshed_finer_than(shape, deflection: float) -> bool:
@@ -469,7 +469,8 @@ def _face_isocurves(face) -> list[np.ndarray]:
 
 
 def tessellate(shape, deflection: float | None = None,
-               angular: float | None = None) -> DisplayMesh:
+               angular: float | None = None,
+               preview: bool = False) -> DisplayMesh:
     from .mesh import MeshShape, mesh_to_display
     from .pointcloud import PointCloudShape, cloud_to_display
     if isinstance(shape, MeshShape):
@@ -477,9 +478,9 @@ def tessellate(shape, deflection: float | None = None,
     if isinstance(shape, PointCloudShape):
         return cloud_to_display(shape)
     if deflection is None:
-        deflection = _deflection_for(shape)
+        deflection = _deflection_for(shape, preview)
     if angular is None:
-        angular = MESH_QUALITIES[_active_quality()][1]
+        angular = MESH_QUALITIES[_active_quality(preview)][1]
     if geometry.shape_kind(shape) != "curve":
         if _meshed_finer_than(shape, deflection):
             # The mesher keeps a triangulation that is already finer than
