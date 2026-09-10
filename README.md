@@ -368,7 +368,9 @@ the user data directory (`~/.local/share/serpentine3d/logs`, or
 `$XDG_DATA_HOME`). `latest.log` always points at the newest run, the
 last ten runs are kept, and **Help → Open Log Folder** takes you there.
 Attach the log to a bug report — a screen that went dark is usually a
-traceback in it. `SERP3D_LOG_DIR` moves the folder; `SERP3D_NO_LOG=1`
+traceback in it, and a beach ball leaves every thread's stack in it
+(the log dumps them when the event loop stops turning for four
+seconds). `SERP3D_LOG_DIR` moves the folder; `SERP3D_NO_LOG=1`
 turns it off.
 
 ## Keep the lights on

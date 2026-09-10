@@ -262,6 +262,13 @@ class MainWindow(QMainWindow):
         self.ctx.add_echo_listener(lambda msg: _log.note("cmd", msg))
         self.selection.add_listener(self._log_selection)
         _log.note("run", "main window up")
+        # a heartbeat for the run log's stall dump: while the event loop
+        # turns this re-arms it, and when the loop stops turning for a
+        # few seconds every thread's stack goes into the log
+        self._heartbeat = QTimer(self)
+        self._heartbeat.setInterval(500)
+        self._heartbeat.timeout.connect(_log.heartbeat)
+        self._heartbeat.start()
         self.scene.add_listener(self._refresh_space_tabs)
         self._refresh_space_tabs()
 

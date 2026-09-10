@@ -4,6 +4,15 @@
 
 ### Added
 
+- **A rolling run log.** Every launch writes a log of itself — machine
+  and driver, files opened, every command-line echo, what was selected
+  when, mouse buttons and keys in the viewport, Qt warnings and Python
+  tracebacks — to `logs/` beside a source checkout or the user data
+  directory; `latest.log` points at the newest and the last ten are
+  kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
+  now comes with the traceback that did it, and a beach ball with
+  every thread's stack: the log dumps them when the event loop stops
+  turning for four seconds.
 - **Rows put into a loft bend rather than fold.** A loft between two
   curves is degree 1 across — straight between them — so rows of
   control points put into that direction and dragged made corners,
@@ -29,13 +38,6 @@
   carries a chip of its own: drag it and the number runs into the
   input line with the gold ghost following; Enter takes it. Nothing
   per command, so it is there for all of them.
-- **A rolling run log.** Every launch writes a log of itself — machine
-  and driver, files opened, every command-line echo, what was selected
-  when, mouse buttons and keys in the viewport, Qt warnings and Python
-  tracebacks — to `logs/` beside a source checkout or the user data
-  directory; `latest.log` points at the newest and the last ten are
-  kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
-  now comes with the traceback that did it.
 - **A row of control points comes off a surface.** `removeknot` takes
   surfaces now, with a Direction (U row, V column, Both) and the
   surface ghosted as it will be; and Delete on held surface control

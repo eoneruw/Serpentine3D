@@ -193,3 +193,18 @@ def test_a_click_says_what_it_came_to(win, runlog):
     text = _text(runlog)
     assert "point-mode" in text, "a press says the pane was waiting for a point"
     win.processor.cancel()
+
+
+def test_a_stall_writes_every_threads_stack_into_the_log(runlog):
+    """faulthandler's timer fires from its own thread, GIL or no GIL: a
+    main thread stuck in a loop still gets its stack written down."""
+    import time
+    runlog.STALL_SECONDS = 0.3
+    runlog.heartbeat()
+    time.sleep(0.8)                       # longer than the stall limit
+    runlog._fh.flush()
+    text = _text(runlog)
+    assert "Thread" in text or "File" in text, text[-500:]
+    assert "test_a_stall_writes_every_threads_stack" in text
+    import faulthandler
+    faulthandler.cancel_dump_traceback_later()

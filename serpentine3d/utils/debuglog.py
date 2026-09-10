@@ -129,7 +129,36 @@ class RunLog:
             if line.strip():
                 self.note(tag, line)
 
+    # ------------------------------------------------------- stalls
+
+    STALL_SECONDS = 4.0
+
+    def heartbeat(self):
+        """The main thread is alive: arm the stall dump afresh.
+
+        Called from a timer on the event loop. If the loop stops turning
+        for STALL_SECONDS — a beach ball — faulthandler, from a thread of
+        its own that needs no GIL, writes every thread's Python stack
+        into this log. That is the one thing a frozen app cannot say for
+        itself, and the one thing that says where it froze.
+        """
+        if self.broken:
+            return
+        try:
+            import faulthandler
+            faulthandler.cancel_dump_traceback_later()
+            self._fh.flush()
+            faulthandler.dump_traceback_later(self.STALL_SECONDS, repeat=False,
+                                              file=self._fh)
+        except Exception:                                  # noqa: BLE001
+            pass
+
     def close(self):
+        try:
+            import faulthandler
+            faulthandler.cancel_dump_traceback_later()
+        except Exception:                                  # noqa: BLE001
+            pass
         try:
             for tag, rest in self._partial.items():
                 if rest.strip():
@@ -236,6 +265,12 @@ def start(directory: str | None = None) -> RunLog | None:
 
 def current() -> RunLog | None:
     return _current
+
+
+def heartbeat():
+    """See RunLog.heartbeat; nothing when no log is open."""
+    if _current is not None:
+        _current.heartbeat()
 
 
 def note(kind: str, text: str):
