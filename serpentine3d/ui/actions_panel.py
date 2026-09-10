@@ -14,7 +14,7 @@ what, shown where you can read it before you need it.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QGridLayout, QLabel, QLineEdit, QScrollArea, QSizePolicy, QToolButton,
     QVBoxLayout, QWidget,
@@ -278,8 +278,18 @@ class ActionsPanel(QWidget):
         root.addWidget(self.scroll, 1)
 
         self.buttons: dict[str, QToolButton] = {}
-        selection.add_listener(self.refresh)
-        scene.add_listener(self.refresh, kinds=("objects",))
+        self._shown: object = None          # what the panel currently shows
+        # Coalesced: a gumball drag of thirty objects replaces thirty
+        # shapes per mouse move, and each replacement tells the scene's
+        # listeners. Rebuilding two hundred buttons thirty times a move
+        # was a beach ball. One refresh per event-loop turn, and none at
+        # all when what it would show is what is showing.
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setSingleShot(True)
+        self._refresh_timer.setInterval(0)
+        self._refresh_timer.timeout.connect(self.refresh)
+        selection.add_listener(self.refresh_soon)
+        scene.add_listener(self.refresh_soon, kinds=("objects",))
         self.refresh()
 
     # ------------------------------------------------------------ building
@@ -308,15 +318,29 @@ class ActionsPanel(QWidget):
             out[o.kind] = out.get(o.kind, 0) + 1
         return out
 
+    def refresh_soon(self, *_):
+        """Refresh once the current burst of changes is over."""
+        self._refresh_timer.start()
+
     def refresh(self, *_):
-        self._clear()
+        self._refresh_timer.stop()
         query = self.search.text().strip().lower()
+        if query:
+            want: object = ("search", query)
+        else:
+            want = ("groups", tuple(
+                (title, tuple(items))
+                for title, items in groups_for(self.kinds(), self.subkinds(),
+                                               self.counts())))
+        if want == self._shown:
+            return
+        self._shown = want
+        self._clear()
         if query:
             self._show_search(query)
         else:
-            for title, items in groups_for(self.kinds(), self.subkinds(),
-                                           self.counts()):
-                self._add_group(title, items)
+            for title, items in want[1]:
+                self._add_group(title, list(items))
         self.body_layout.addStretch(1)
 
     def _add_group(self, title: str, items: list):
@@ -369,4 +393,8 @@ class ActionsPanel(QWidget):
         return btn
 
     def visible_commands(self) -> list[str]:
+        """What is on offer — brought up to date first, if a refresh is
+        pending, so a reader never sees the previous selection's list."""
+        if self._refresh_timer.isActive():
+            self.refresh()
         return list(self.buttons)
