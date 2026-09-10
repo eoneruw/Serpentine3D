@@ -4,6 +4,17 @@
 
 ### Added
 
+- **ExtendSrf gives back one surface, and MergeSrf makes one of two.**
+  Extending a surface sewed a strip onto it, and the result was two
+  faces: Points On said "explode polysurfaces first", and a pulled
+  handle opened the seam. The extension is now part of the same B-spline
+  — the original untouched, one new row of handles beyond the edge. And
+  `mergesrf` (Rhino's MergeSrf) takes two untrimmed surfaces that share
+  an edge — a panel and its blend, a surface and an extension from an
+  older build, a two-face polysurface — and gives one surface with one
+  net of control points: exactly when the two are really one surface
+  cut in two, otherwise fitted through both with the deviation reported.
+  Both, and Explode, are in the Actions panel for a surface.
 - **Mesh quality.** The Display panel has a **Mesh** row — Coarse, Normal,
   Fine, Very fine — and a `meshquality` command, remembered in settings.
   Normal is what every mode used to get. A mirror-like reflection in
