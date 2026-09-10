@@ -37,7 +37,8 @@ def test_every_command_the_table_names_exists_or_is_skipped_quietly():
     from serpentine3d.commands.base import resolve
     named = {name for groups in (ap.NOTHING, ap.CURVES, ap.SURFACES,
                                  ap.SOLIDS, ap.MESHES, ap.POINTCLOUDS,
-                                 ap.PICTURES, ap.ANY, ap.EDGES, ap.FACES)
+                                 ap.PICTURES, ap.ANY, ap.EDGES, ap.FACES,
+                                 ap.POINTS)
              for _, items in groups for name, _ in items}
     named |= {name for _, _, items in ap.TOGETHER for name, _ in items}
     missing = sorted(n for n in named if resolve(n.split()[0]) is None)
@@ -145,3 +146,14 @@ def test_insert_column_is_the_same_command_with_its_direction_answered(win):
     shown = win.actions_panel.visible_commands()
     assert "insertknot" in shown and "insertknot Direction V" in shown
     assert ap.describe("insertknot Direction V").startswith("insertknot:")
+
+
+def test_held_control_points_offer_weight(win):
+    o = win.scene.add(g.make_line((0, 0, 0), (10, 0, 0)), name="L")
+    win.selection.set_subobjects([(o.id, "cv", 0)])
+    shown = win.actions_panel.visible_commands()
+    assert "removecontrolpoint" in shown
+    # weight itself lives on another branch; the panel skips what the
+    # build does not have and shows it when it does
+    from serpentine3d.commands.base import resolve
+    assert ("weight" in shown) == (resolve("weight") is not None)
