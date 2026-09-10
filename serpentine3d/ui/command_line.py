@@ -134,7 +134,7 @@ class ScrubChip(QPushButton):
     scrubbed = Signal(str, float, bool)     # name, value, final
 
     def __init__(self, name: str, value: float, scrub, parent=None):
-        super().__init__(f"{name}={value:g}", parent)
+        super().__init__(f"{name}={value:.4g}", parent)
         self.name = name
         self.value = float(value)
         self.scrub = scrub
@@ -147,7 +147,7 @@ class ScrubChip(QPushButton):
 
     def show_value(self, value: float):
         self.value = float(value)
-        self.setText(f"{self.name}={self.value:g}")
+        self.setText(f"{self.name}={self.value:.4g}")
 
     def mousePressEvent(self, ev):
         if ev.button() == Qt.MouseButton.LeftButton:
@@ -197,6 +197,7 @@ class CommandLine(QWidget):
     cancelled = Signal()
     optionClicked = Signal(str)     # option chip clicked -> cycle its value
     optionScrubbed = Signal(str, float, bool)   # a number chip dragged
+    numberScrubbed = Signal(float, bool)        # the prompt's own number
     keywordClicked = Signal(str)    # keyword chip clicked -> answers prompt
     tabPressed = Signal()           # Tab while a point is wanted
 
@@ -361,6 +362,44 @@ class CommandLine(QWidget):
             chip.setStyleSheet(self._CHIP_STYLE)
             self._chip_row.addWidget(chip)
             self._chips.append(chip)
+
+    def set_number_scrub(self, spec):
+        """A chip for the number the prompt itself wants, or none.
+
+        `spec` is (label, Scrub) from the processor, or None. Dragging
+        it writes the number into the input line — where Enter takes it
+        — and the live ghost follows; it is the prompt's default until
+        you type or drag. The chip is kept, not rebuilt, while the
+        prompt is the same one.
+        """
+        have = getattr(self, "_number_chip", None)
+        if spec is None:
+            if have is not None:
+                self._chip_row.removeWidget(have)
+                have.deleteLater()
+                self._number_chip = None
+            return
+        label, scrub = spec
+        if have is not None and have.name == label \
+                and have.scrub.integer == scrub.integer:
+            have.scrub = scrub
+            return
+        if have is not None:
+            self._chip_row.removeWidget(have)
+            have.deleteLater()
+        chip = ScrubChip(label, scrub.default, scrub)
+        chip.setFlat(True)
+        chip.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        chip.setStyleSheet(self._CHIP_STYLE.replace("#d8b44a", "#e0c98a"))
+        chip.setToolTip(f"Drag left/right to try a value for {label}; "
+                        "Enter takes it")
+        chip.scrubbed.connect(
+            lambda _n, v, final: self.numberScrubbed.emit(v, final))
+        self._chip_row.insertWidget(0, chip)
+        self._number_chip = chip
+
+    def number_chip(self):
+        return getattr(self, "_number_chip", None)
 
     def set_keywords(self, words: list):
         """Show one-shot keyword chips; clicking one answers the prompt.

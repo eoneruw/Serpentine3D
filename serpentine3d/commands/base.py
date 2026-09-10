@@ -40,8 +40,11 @@ class Scrub:
     minimum: float | None = None
     maximum: float | None = None
     step: float = 0.01               # per pixel of drag
+    integer: bool = False            # whole numbers only (a count)
 
     def clamp(self, value: float) -> float:
+        if self.integer:
+            value = float(round(value))
         if self.minimum is not None:
             value = max(self.minimum, value)
         if self.maximum is not None:
@@ -1084,6 +1087,45 @@ class CommandProcessor:
             return []
         return [(n, self.command_options.get(n, option_default(v)))
                 for n, v in req.choices.items()]
+
+    def number_scrub(self, scale: float = 100.0):
+        """The number the current prompt would take, as something to drag.
+
+        (label, Scrub) for a prompt that takes a number — a NumberReq,
+        an IntReq, a LengthReq, or a PointReq that reads a bare number
+        as a distance (number_from, axis_lock, allow_number) — or None.
+        The chip beside the prompt drags this into the input line, and
+        the ghost the prompt already draws for typed text follows, so
+        every fillet radius, offset distance and extrusion height can
+        be found by eye. `scale` is roughly how big the model is, for
+        a drag step that suits it.
+        """
+        req = self.request
+        if req is None:
+            return None
+        label = format_prompt(req).split(" (")[0].split(" <")[0]
+        label = label.split(", or ")[0].strip()
+        low = label.lower()
+        if isinstance(req, IntReq):
+            d = float(req.default if req.default is not None else 1)
+            return label, Scrub(d, req.minimum, None, step=0.125,
+                                integer=True)
+        if isinstance(req, NumberReq):        # LengthReq included
+            d = float(req.default if req.default is not None else 0.0)
+            step = max(abs(d), 1.0) / 100.0
+            if isinstance(req, LengthReq):
+                step = max(scale, 1.0) / 400.0
+            return label, Scrub(d, req.minimum, None, step=step)
+        if isinstance(req, PointReq) and (req.number_from is not None
+                                          or req.axis_lock is not None
+                                          or req.allow_number):
+            step = max(scale, 1.0) / 400.0
+            if "factor" in low:
+                step = 0.01                   # a ratio, not a length
+            elif "angle" in low:
+                step = 0.5                    # degrees
+            return label, Scrub(0.0, None, None, step=step)
+        return None
 
     def option_scrub(self, name: str):
         """The Scrub behind an option chip, or None for a list one."""
