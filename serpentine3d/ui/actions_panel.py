@@ -45,7 +45,7 @@ NOTHING = [
 CURVES = [
     ("Edit curve", [("pointson", "Points On"), ("insertknot", "Insert Point"),
                     ("removeknot", "Remove Point"), ("weight", "Weight"),
-                    ("rebuild", "Rebuild"),
+                    ("changedegree", "Degree"), ("rebuild", "Rebuild"),
                     ("join", "Join"), ("explode", "Explode"),
                     ("offset", "Offset"), ("fillet", "Fillet"),
                     ("extend", "Extend"), ("trim", "Trim"),
@@ -67,7 +67,8 @@ SURFACES = [
                       ("insertknot Direction Both", "Insert Both"),
                       ("removeknot", "Remove Row"),
                       ("removeknot Direction V", "Remove Column"),
-                      ("weight", "Weight"), ("untrim", "Untrim"),
+                      ("weight", "Weight"), ("changedegree", "Degree"),
+                      ("untrim", "Untrim"),
                       ("trim", "Trim"), ("split", "Split"),
                       ("join", "Join"), ("offsetsrf", "Offset"),
                       ("extendsrf", "Extend"), ("flip", "Flip"),
