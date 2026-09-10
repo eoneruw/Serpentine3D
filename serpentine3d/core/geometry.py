@@ -2340,6 +2340,50 @@ def change_curve_degree(shape, degree: int) -> TopoDS_Shape:
     return _curve_from_splines(splines)
 
 
+def _flat_knots(bs, which: str) -> list[float]:
+    """The flat knot sequence of a B-spline surface in one direction."""
+    from OCP.TColStd import TColStd_Array1OfReal
+    if which == "u":
+        flat = TColStd_Array1OfReal(1, bs.NbUPoles() + bs.UDegree() + 1)
+        bs.UKnotSequence(flat)
+    else:
+        flat = TColStd_Array1OfReal(1, bs.NbVPoles() + bs.VDegree() + 1)
+        bs.VKnotSequence(flat)
+    return [flat.Value(i) for i in range(flat.Lower(), flat.Upper() + 1)]
+
+
+def _knot_for_greville(flat: list[float], degree: int, g: float) -> float:
+    """The knot to insert so that a new control point acts at `g`.
+
+    A knot at the picked parameter is not a control point there: a
+    pole acts at its Greville abscissa, the mean of the `degree` knots
+    after it, so a knot put at u lands the new row of handles somewhere
+    to one side of the line that was picked. Rhino's InsertControlPoint
+    does what this does — put the knot where the handle will be at u.
+
+    The new pole's abscissa is (t + the degree-1 knots beside t) / degree,
+    so for each window of degree-1 consecutive knots the t that lands at
+    g follows, and the one that actually sits beside its window is it.
+    When none does (g within a degree-1 window of an end), the knot goes
+    at g itself, which is as close as a handle there can get.
+    """
+    if degree < 2:
+        return g
+    w = degree - 1
+    eps = max(abs(flat[-1] - flat[0]), 1.0) * 1e-6
+    best = None
+    for j in range(len(flat) - w + 1):
+        window = flat[j:j + w]
+        t = degree * g - sum(window)
+        lo = flat[j - 1] if j > 0 else float("-inf")
+        hi = flat[j + w] if j + w < len(flat) else float("inf")
+        if lo <= t <= hi and flat[0] + eps < t < flat[-1] - eps:
+            score = abs(t - g)
+            if best is None or score < best[0]:
+                best = (score, t)
+    return best[1] if best is not None else g
+
+
 def insert_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
     """A copy of the surface with a knot row added through `point`.
 
@@ -2365,12 +2409,16 @@ def insert_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
             if min(abs(u - u0), abs(u - u1)) < eps_u:
                 raise GeometryError("That is the edge of the surface — pick "
                                     "a point on it")
-            bs.InsertUKnot(u, 1, tol() * 0.01)
+            bs.InsertUKnot(_knot_for_greville(_flat_knots(bs, "u"),
+                                              bs.UDegree(), u),
+                           1, tol() * 0.01)
         if want in ("v", "both"):
             if min(abs(v - v0), abs(v - v1)) < eps_v:
                 raise GeometryError("That is the edge of the surface — pick "
                                     "a point on it")
-            bs.InsertVKnot(v, 1, tol() * 0.01)
+            bs.InsertVKnot(_knot_for_greville(_flat_knots(bs, "v"),
+                                              bs.VDegree(), v),
+                           1, tol() * 0.01)
     except GeometryError:
         raise
     except Exception as exc:                                   # noqa: BLE001
@@ -2407,6 +2455,29 @@ def surface_iso_lines_at(shape, point, direction: str = "u") -> list:
     if direction.lower() in ("v", "both"):
         out.append(iso_curve(shape, point, along="u"))
     return out
+
+
+def new_control_rows_at(shape, point, direction: str = "u") -> list:
+    """The row(s) of control points insert_surface_knot would add through
+    `point`, as polylines to ghost — the handles themselves, not the line
+    on the surface they act on, so what is shown is what appears."""
+    import numpy as np
+    new = insert_surface_knot(shape, point, direction)
+    pts, (nu, nv) = surface_control_points(new)
+    grid = np.asarray(pts, float).reshape(nu, nv, 3)
+    target = np.asarray(point, float)
+    out = []
+    want = direction.lower()
+    if want in ("u", "both") and nu > 1:
+        rows = [grid[i] for i in range(nu)]
+        out.append(min(rows, key=lambda r: np.linalg.norm(
+            r - target, axis=1).min()))
+    if want in ("v", "both") and nv > 1:
+        cols = [grid[:, j] for j in range(nv)]
+        out.append(min(cols, key=lambda c: np.linalg.norm(
+            c - target, axis=1).min()))
+    return [make_polyline([tuple(p) for p in line]) for line in out
+            if len(line) > 1]
 
 
 def _remove_surface_knot_at(bs, which: str, param: float):
