@@ -84,6 +84,22 @@ def test_no_smooth_keeps_the_seam():
     assert g.surface_control_points(face)[1] == (5, 3)     # seam kept
 
 
+def test_a_weighted_surface_is_fitted_not_refused():
+    """A Weight edit makes a surface rational, and the exact assembly
+    cannot carry weights: "CompBezierSurfacesToBSpl : rational !" was
+    the whole of the command's answer. Such a pair is fitted."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    a = _bonnet()
+    bs, _ = g._face_bspline_surface(a)
+    bs.SetWeight(2, 2, 2.5)
+    heavy = BRepBuilderAPI_MakeFace(bs, 1e-6).Face()
+    b = _continuation(heavy)
+    face, exact, dev = g.merge_surfaces(heavy, b)
+    assert not exact
+    assert len(g.faces_of(face)) == 1
+    assert dev < 0.2
+
+
 # -- the command --
 
 def _run(scene, text, *answers):
