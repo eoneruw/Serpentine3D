@@ -970,3 +970,35 @@ def cmd_radius(ctx):
     else:
         ctx.echo(f"Radius: {ctx.scene.format_length(info['radius'])}"
                  f"  (curvature {k:.6g})")
+
+
+@command("meshquality", mutates=False, space="any")
+def cmd_meshquality(ctx):
+    """How finely curved surfaces are cut into triangles for the screen:
+    Coarse, Normal, Fine or VeryFine. Fine and above are for Rendered —
+    a mirror-like reflection shows a coarse mesh's triangles as creases."""
+    from ..core import tessellate
+    labels = {"coarse": "Coarse", "normal": "Normal",
+              "fine": "Fine", "very fine": "VeryFine"}
+    current = tessellate.mesh_quality()
+    pick = yield OptionReq("Mesh quality", options=list(labels.values()),
+                           default=labels[current])
+    name = next((k for k, v in labels.items() if v == pick), None)
+    if name is None:
+        ctx.echo(f"No such mesh quality: {pick}.")
+        return
+    if name == current:
+        ctx.echo(f"Mesh quality is already {pick}.")
+        return
+    tessellate.set_mesh_quality(name)
+    win = ctx.window
+    if win is not None:
+        cfg = getattr(win, "cfg", None)
+        if cfg is not None:
+            cfg.set("display", "mesh_quality", name)
+        panel = getattr(win, "display_panel", None)
+        if panel is not None:
+            panel.refresh()
+    ctx.scene.drop_meshes()
+    _redraw_all(ctx)
+    ctx.echo(f"Mesh quality {pick}.")

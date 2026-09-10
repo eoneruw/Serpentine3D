@@ -22,6 +22,7 @@ from . import ibl
 
 #: The combo's last entry: pick an equirectangular image of your own.
 _CUSTOM = "__custom__"
+from ..core import tessellate
 
 #: Mode id to the label people read, in the order the View menu lists them.
 _MODES = [
@@ -36,17 +37,27 @@ _MODES = [
     ("draft", "Draft angle"),
 ]
 
+#: Mesh quality id to its label, coarsest first.
+_QUALITIES = [
+    ("coarse", "Coarse"),
+    ("normal", "Normal"),
+    ("fine", "Fine"),
+    ("very fine", "Very fine"),
+]
+
 
 class DisplayPanel(QWidget):
     """Display settings for whichever viewport is active."""
 
-    def __init__(self, viewport_source, parent=None, all_panes=None):
+    def __init__(self, viewport_source, parent=None, all_panes=None,
+                 config=None):
         super().__init__(parent)
         self._source = viewport_source
         # the environment is the scene's, so a change to it redraws every
         # pane; without this, only the active one
         self._all = all_panes or (lambda: [p for p in [viewport_source()]
                                            if p is not None])
+        self._config = config
         self._loading = False           # refresh must not look like a click
 
         self.mode_box = QComboBox()
@@ -66,9 +77,23 @@ class DisplayPanel(QWidget):
         self.edge_box.toggled.connect(
             lambda on: self._write(lambda vp: vp.set_edges(on)))
 
+        # How finely curved surfaces are cut into triangles. One setting
+        # for the whole scene rather than per pane: the mesh is cached on
+        # the object, and every pane draws the same one.
+        self.quality_box = QComboBox()
+        for quality_id, label in _QUALITIES:
+            self.quality_box.addItem(label, quality_id)
+        self.quality_box.setToolTip(
+            "How finely curved surfaces are cut into triangles for the "
+            "screen. Fine or Very fine stops a mirror-like reflection in "
+            "Rendered from showing the triangles as creases; Coarse keeps "
+            "a heavy scene quick.")
+        self.quality_box.currentIndexChanged.connect(self._quality_picked)
+
         form = QFormLayout()
         form.setContentsMargins(8, 8, 8, 4)
         form.addRow("Mode", self.mode_box)
+        form.addRow("Mesh", self.quality_box)
 
         # -- the environment, for the PBR mode --
         self.env_box = QComboBox()
@@ -189,6 +214,9 @@ class DisplayPanel(QWidget):
             self.rotation.setValue(int(round(
                 float(env.get("rotation", 0.0))) % 360))
             self.sky_box.setChecked(bool(env.get("background", False)))
+            q = self.quality_box.findData(tessellate.mesh_quality())
+            if q >= 0:
+                self.quality_box.setCurrentIndex(q)
         finally:
             self._loading = False
 
@@ -204,7 +232,32 @@ class DisplayPanel(QWidget):
         self._write(lambda vp: vp.set_display_mode(mode))
         self.env_widget.setVisible(mode == "pbr")
 
+    def _quality_picked(self, _index):
+        if self._loading:
+            return
+        name = self.quality_box.currentData()
+        if name == tessellate.mesh_quality():
+            return
+        tessellate.set_mesh_quality(name)
+        if self._config is not None:
+            self._config.set("display", "mesh_quality", name)
+        vp = self.viewport()
+        panes = list(self._all()) or ([vp] if vp is not None else [])
+        scenes = {id(p.scene): p.scene for p in panes if hasattr(p, "scene")}
+        for scene in scenes.values():
+            scene.drop_meshes()
+        for pane in panes:
+            pane.update()
+
     # -- what the tests and the window talk to --
+
+    def mesh_quality(self) -> str:
+        return self.quality_box.currentData()
+
+    def set_mesh_quality(self, name: str):
+        i = self.quality_box.findData(name)
+        if i >= 0:
+            self.quality_box.setCurrentIndex(i)
 
     def mode(self) -> str:
         return self.mode_box.currentData()

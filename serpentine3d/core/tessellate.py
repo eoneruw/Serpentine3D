@@ -122,11 +122,40 @@ class DisplayMesh:
 # decides most of the count on a big model.
 ANGULAR_DEFLECTION = 0.15
 
+# The display mesh quality: how fine a curved surface is cut into
+# triangles for the screen. (linear deflection as a fraction of the
+# object's size, angular deflection in radians.) Normal is what every
+# mode used to get. Fine and Very fine are for the reflective modes: a
+# mirror-like reflection is read off interpolated normals, and across a
+# big triangle the interpolation is only straight, so a smooth bonnet
+# shows the triangle edges as creases in the highlight. Coarse is for a
+# scan-heavy scene that has to stay quick.
+MESH_QUALITIES = {
+    "coarse": (0.004, 0.30),
+    "normal": (0.002, 0.15),
+    "fine": (0.0008, 0.06),
+    "very fine": (0.0004, 0.03),
+}
+_QUALITY = "normal"
+
+
+def set_mesh_quality(name: str):
+    """Pick a display mesh quality by name. Meshes already made are not
+    touched: whoever changes this drops them (Scene.drop_meshes)."""
+    global _QUALITY
+    if name not in MESH_QUALITIES:
+        raise ValueError(f"unknown mesh quality {name!r}")
+    _QUALITY = name
+
+
+def mesh_quality() -> str:
+    return _QUALITY
+
 
 def _deflection_for(shape) -> float:
     (mn, mx) = geometry.bbox(shape)
     diag = float(np.linalg.norm(np.subtract(mx, mn)))
-    return max(diag * 0.002, 1e-4)
+    return max(diag * MESH_QUALITIES[_QUALITY][0], 1e-4)
 
 
 def default_deflection(shape) -> float:
@@ -400,7 +429,7 @@ def tessellate(shape, deflection: float | None = None,
     if deflection is None:
         deflection = _deflection_for(shape)
     if angular is None:
-        angular = ANGULAR_DEFLECTION
+        angular = MESH_QUALITIES[_QUALITY][1]
     if geometry.shape_kind(shape) != "curve":
         BRepMesh_IncrementalMesh(shape, deflection, False, angular, True)
 

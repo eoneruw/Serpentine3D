@@ -343,6 +343,13 @@ class Scene:
         self.notify("objects")
         return obj
 
+    def drop_meshes(self):
+        """Forget every display mesh, so the next frame cuts them afresh —
+        after the mesh quality changes. The geometry is untouched."""
+        for obj in self.objects.values():
+            obj._mesh = None
+        self.notify("objects")
+
     def realise_layer(self, layer_id: str) -> int:
         """Convert everything still deferred on a layer. Returns how many.
 
