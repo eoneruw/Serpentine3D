@@ -68,7 +68,7 @@ SURFACES = [
                       ("removeknot", "Remove Row"),
                       ("removeknot Direction V", "Remove Column"),
                       ("weight", "Weight"), ("changedegree", "Degree"),
-                      ("untrim", "Untrim"),
+                      ("rebuild", "Rebuild"), ("untrim", "Untrim"),
                       ("trim", "Trim"), ("split", "Split"),
                       ("join", "Join"), ("explode", "Explode"),
                       ("mergesrf", "Merge"), ("offsetsrf", "Offset"),
