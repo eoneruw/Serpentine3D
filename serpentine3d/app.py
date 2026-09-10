@@ -197,7 +197,8 @@ class MainWindow(QMainWindow):
         # Rhino looks along for it (GitHub #5). It stays short — a mode and
         # two checkboxes — so it costs the other two almost nothing.
         self.display_panel = DisplayPanel(
-            viewport_source=lambda: self.active_viewport)
+            viewport_source=lambda: self.active_viewport,
+            all_panes=lambda: self.all_viewports())
         self._display_dock = QDockWidget("Display", self)
         self._display_dock.setObjectName("displayDock")
         self._display_dock.setWidget(self.display_panel)

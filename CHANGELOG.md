@@ -4,6 +4,25 @@
 
 ### Added
 
+- **Environments for the PBR mode.** One procedural studio lit
+  everything; now the Display panel (mode Rendered (PBR)) and the
+  `environment` command offer Studio, Well-lit studio, Sunny day,
+  Sunset, Overcast and Warehouse, or an equirectangular .hdr/.png/.jpg
+  of your own, each with a Rotation about the model, an Exposure, and
+  the option of being drawn behind the model. The choice is the
+  scene's — one sky however many panes — and is saved with the file.
+- **Option chips you can drag.** An option that is a number — a
+  `Scrub(...)` in a request's `choices` — shows as a chip beside the
+  prompt that you press and drag sideways, the value running between
+  its limits (Shift for a finer hand, wheel to nudge); a list chip
+  still cycles on a click. A request's `on_option` hears every change
+  as it happens, so a command can rebuild what it is making while you
+  look at it, and the history is told once, when you let go. And every
+  prompt that takes a number at all — fillet radius, offset distance,
+  extrusion height, pipe radius, wall thickness, a count, an angle —
+  carries a chip of its own: drag it and the number runs into the
+  input line with the gold ghost following; Enter takes it. Nothing
+  per command, so it is there for all of them.
 - **A rolling run log.** Every launch writes a log of itself — machine
   and driver, files opened, every command-line echo, what was selected
   when, mouse buttons and keys in the viewport, Qt warnings and Python
@@ -26,18 +45,6 @@
   high enough and the turn is nearly a kink with no knot added; below
   1 it goes soft. The shape follows the drag; Enter keeps it, Escape
   puts it back. The points stay where they are.
-- **Option chips you can drag.** An option that is a number — a
-  `Scrub(...)` in a request's `choices` — shows as a chip beside the
-  prompt that you press and drag sideways, the value running between
-  its limits (Shift for a finer hand, wheel to nudge); a list chip
-  still cycles on a click. A request's `on_option` hears every change
-  as it happens, so a command can rebuild what it is making while you
-  look at it, and the history is told once, when you let go. And every
-  prompt that takes a number at all — fillet radius, offset distance,
-  extrusion height, pipe radius, wall thickness, a count, an angle —
-  carries a chip of its own: drag it and the number runs into the
-  input line with the gold ghost following; Enter takes it. Nothing
-  per command, so it is there for all of them.
 - **A row of control points comes off a surface.** `removeknot` takes
   surfaces now, with a Direction (U row, V column, Both) and the
   surface ghosted as it will be; and Delete on held surface control

@@ -539,6 +539,50 @@ out vec4 frag;
 void main() { frag = vec4(mix(uBottom, uTop, vY), 1.0); }
 """
 
+SKY_VERT = """
+#version 330 core
+layout(location=0) in vec2 pos;
+out vec2 vNdc;
+void main() { vNdc = pos; gl_Position = vec4(pos, 0.999, 1.0); }
+"""
+
+SKY_FRAG = """
+#version 330 core
+// The environment behind the model: for each pixel the direction the
+// camera looks through it, turned by the environment's rotation, read
+// from the same equirect map the surfaces reflect, a little blurred so
+// the backdrop sits behind the model rather than competing with it.
+in vec2 vNdc;
+uniform vec3 uRight, uUp, uFwd;   // the camera's basis, world space
+uniform float uTanHalf;           // tan(fov / 2)
+uniform float uAspect;
+uniform int uOrtho;
+uniform mat3 uEnvRot;
+uniform sampler2D uEnv;
+uniform float uLod;
+uniform float uExposure;
+out vec4 frag;
+const float PI = 3.14159265;
+vec2 equirect(vec3 d) {
+    float u = atan(d.y, d.x) / (2.0 * PI) + 0.5;
+    float v = acos(clamp(d.z, -1.0, 1.0)) / PI;
+    return vec2(u, v);
+}
+vec3 aces(vec3 x) {
+    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+void main() {
+    vec3 dir = uOrtho == 1 ? uFwd
+        : normalize(uFwd + uRight * (vNdc.x * uAspect * uTanHalf)
+                         + uUp * (vNdc.y * uTanHalf));
+    dir = uEnvRot * dir;
+    vec3 c = textureLod(uEnv, equirect(dir), uLod).rgb;
+    c = aces(c * uExposure);
+    frag = vec4(pow(c, vec3(1.0 / 2.2)), 1.0);
+}
+"""
+
 
 def _compile(vert_src: str, frag_src: str) -> int:
     def sh(kind, src):
@@ -1207,6 +1251,8 @@ class Viewport(QOpenGLWidget):
         self._mesh_prog = self._line_prog = self._bg_prog = 0
         self._pbr_prog = 0
         self._env_tex = 0
+        self._env_texes = {}
+        self._sky_prog = 0
         self._thick_prog = 0
         self._point_prog = 0
         # Point clouds: how big a point is on screen and how many the frame
@@ -1270,7 +1316,9 @@ class Viewport(QOpenGLWidget):
         self._grid = None
         self._mesh_prog = _compile(MESH_VERT, MESH_FRAG)
         self._pbr_prog = _compile(MESH_VERT, PBR_FRAG)
-        self._env_tex = 0             # uploaded on the first PBR frame
+        self._sky_prog = _compile(SKY_VERT, SKY_FRAG)
+        self._env_tex = 0             # the map bound this frame, if any
+        self._env_texes = {}          # environment name -> GL texture
         self._line_prog = _compile(LINE_VERT, LINE_FRAG)
         self._thick_prog = _compile(THICK_VERT, LINE_FRAG)
         self._point_prog = _compile(POINT_VERT, POINT_FRAG)
@@ -1420,6 +1468,9 @@ class Viewport(QOpenGLWidget):
                        *theme.VIEWPORT_BG_BOTTOM)
         GL.glBindVertexArray(self._bg_vao)
         GL.glDrawArrays(GL.GL_TRIANGLE_STRIP, 0, 4)
+        if (self.space == "model" and self.display_mode == "pbr"
+                and self.environment_settings().get("background")):
+            self._draw_sky()
         GL.glEnable(GL.GL_DEPTH_TEST)
 
         w, h = self.width(), self.height()
@@ -2694,21 +2745,32 @@ class Viewport(QOpenGLWidget):
             GL.glBindVertexArray(self._preview.vao)
             GL.glDrawArrays(GL.GL_LINES, 0, len(segs))
 
-    def _bind_environment(self, view):
-        """Put the studio around the model: the prefiltered environment on
-        texture unit 0 with its roughness ladder as mip levels, the
-        irradiance harmonics, and the rotation that takes the shader's
-        view-space vectors back into the world the studio is fixed in.
+    def environment_settings(self) -> dict:
+        """The scene's environment: name, rotation, exposure, background.
+        See core.scene.DEFAULT_ENVIRONMENT."""
+        from ..core.scene import DEFAULT_ENVIRONMENT
+        got = getattr(self.scene, "environment", None) or {}
+        out = dict(DEFAULT_ENVIRONMENT)
+        out.update(got)
+        return out
 
-        Building the maps takes about a second and happens once per
-        process (ibl.studio_lighting is cached); uploading them happens
-        once per GL context.
-        """
+    def _environment_texture(self, name: str):
+        """The prefiltered ladder of an environment on the GPU, uploaded
+        once per name per context. Returns (texture, ladder, sh), or
+        None when the environment cannot be built (a bad image path),
+        in which case the studio stands in."""
         from . import ibl
-        ladder, sh = ibl.studio_lighting()
-        if not self._env_tex:
-            self._env_tex = GL.glGenTextures(1)
-            GL.glBindTexture(GL.GL_TEXTURE_2D, self._env_tex)
+        try:
+            ladder, sh = ibl.lighting(name)
+        except Exception as exc:                               # noqa: BLE001
+            print(f"serp3d: environment {name!r}: {exc}", file=sys.stderr)
+            if name == "studio":
+                raise
+            return self._environment_texture("studio")
+        tex = self._env_texes.get(name)
+        if not tex:
+            tex = GL.glGenTextures(1)
+            GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
             for level, img in enumerate(ladder):
                 h, w = img.shape[:2]
                 GL.glTexImage2D(GL.GL_TEXTURE_2D, level, GL.GL_RGB16F, w, h,
@@ -2725,21 +2787,84 @@ class Viewport(QOpenGLWidget):
                                GL.GL_REPEAT)
             GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T,
                                GL.GL_CLAMP_TO_EDGE)
+            self._env_texes[name] = tex
+        return tex, ladder, sh
+
+    def _environment_rotation(self) -> np.ndarray:
+        """The 3x3 that turns a world-space lookup direction by the
+        environment's rotation: turning the sky by +r degrees about Z is
+        turning what looks at it by -r."""
+        r = -math.radians(float(self.environment_settings().get("rotation",
+                                                                0.0)))
+        c, s_ = math.cos(r), math.sin(r)
+        return np.array([[c, -s_, 0.0], [s_, c, 0.0], [0.0, 0.0, 1.0]])
+
+    def _bind_environment(self, view):
+        """Put the environment around the model: its prefiltered map on
+        texture unit 0 with the roughness ladder as mip levels, the
+        irradiance harmonics, the exposure, and the rotation that takes
+        the shader's view-space vectors back into the world the
+        environment is fixed in — the environment's own turn folded in.
+
+        Building a map takes about a second and happens once per
+        process per environment (ibl.lighting is cached); uploading it
+        happens once per GL context.
+        """
+        settings = self.environment_settings()
+        got = self._environment_texture(str(settings.get("name", "studio")))
+        tex, ladder, sh = got
+        self._env_tex = tex
         prog = self._pbr_prog
         self._use(prog)
         GL.glActiveTexture(GL.GL_TEXTURE0)
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self._env_tex)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
         GL.glUniform1i(self._uloc(prog, "uEnv"), 0)
         GL.glUniform1f(self._uloc(prog, "uEnvMaxLod"), float(len(ladder) - 1))
         GL.glUniform3fv(self._uloc(prog, "uSH"), 9,
                         np.ascontiguousarray(sh, np.float32))
-        GL.glUniform1f(self._uloc(prog, "uExposure"), 0.8)
+        GL.glUniform1f(self._uloc(prog, "uExposure"),
+                       float(settings.get("exposure", 0.8)))
         # the view matrix's rotation part, inverted: it is orthonormal, so
         # the transpose does, and the anchors only ever shift the
         # translation, so one rotation serves every object in the frame
-        rot = np.asarray(view, np.float64)[:3, :3].T
+        rot = self._environment_rotation() @ np.asarray(view,
+                                                        np.float64)[:3, :3].T
         GL.glUniformMatrix3fv(self._uloc(prog, "uViewToWorld"), 1, GL.GL_TRUE,
                               np.ascontiguousarray(rot, np.float32))
+
+    def _draw_sky(self):
+        """The environment behind the model, for the PBR mode when asked."""
+        if not self._sky_prog:
+            return
+        settings = self.environment_settings()
+        tex, ladder, _sh = self._environment_texture(
+            str(settings.get("name", "studio")))
+        cam = self.camera
+        right, up = cam.right_up()
+        fwd = cam.target - cam.position
+        fwd = fwd / max(float(np.linalg.norm(fwd)), 1e-12)
+        prog = self._sky_prog
+        self._use(prog)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, tex)
+        GL.glUniform1i(self._uloc(prog, "uEnv"), 0)
+        GL.glUniform3f(self._uloc(prog, "uRight"), *map(float, right))
+        GL.glUniform3f(self._uloc(prog, "uUp"), *map(float, up))
+        GL.glUniform3f(self._uloc(prog, "uFwd"), *map(float, fwd))
+        GL.glUniform1f(self._uloc(prog, "uTanHalf"),
+                       math.tan(math.radians(cam.fov) / 2.0))
+        GL.glUniform1f(self._uloc(prog, "uAspect"),
+                       self.width() / max(self.height(), 1))
+        GL.glUniform1i(self._uloc(prog, "uOrtho"),
+                       1 if cam.projection == "parallel" else 0)
+        GL.glUniformMatrix3fv(
+            self._uloc(prog, "uEnvRot"), 1, GL.GL_TRUE,
+            np.ascontiguousarray(self._environment_rotation(), np.float32))
+        GL.glUniform1f(self._uloc(prog, "uLod"), 1.0)
+        GL.glUniform1f(self._uloc(prog, "uExposure"),
+                       float(settings.get("exposure", 0.8)))
+        GL.glBindVertexArray(self._bg_vao)
+        GL.glDrawArrays(GL.GL_TRIANGLE_STRIP, 0, 4)
 
     def _draw_ground_shadow(self, mvp, objects):
         """Flatten object triangles onto z=0 as a soft dark stamp."""

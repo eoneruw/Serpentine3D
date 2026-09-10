@@ -93,6 +93,7 @@ def save_scene(scene, path: str, thumbnail: bytes | None = None):
         "named_views": scene.named_views,
         "units": scene.units,
         "image_planes": scene.image_planes,
+        "environment": dict(getattr(scene, "environment", {}) or {}),
         "block_defs": {
             bid: {
                 "name": bd["name"],
@@ -280,6 +281,11 @@ def _load_doc(scene, doc: dict, blobs=None):
     scene.named_views = dict(doc.get("named_views", {}))
     scene.units = doc.get("units", scene.units)
     scene.image_planes = list(doc.get("image_planes", []))
+    if isinstance(doc.get("environment"), dict):
+        from ..core.scene import DEFAULT_ENVIRONMENT
+        env = dict(DEFAULT_ENVIRONMENT)
+        env.update(doc["environment"])
+        scene.environment = env
     for bid, bd in doc.get("block_defs", {}).items():
         scene.block_defs[bid] = {
             "name": bd["name"],
