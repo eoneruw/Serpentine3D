@@ -460,9 +460,11 @@ def _say_if_lifted(ctx, o, was, shape):
     now = g.surface_degrees(shape)
     if now != was:
         which = " and ".join(d for d, a, b in zip("UV", was, now) if a != b)
+        extra = sum(b - a for a, b in zip(was, now))
         ctx.echo(f"{o.name}: raised to degree {g.SMOOTH_DEGREE} in {which} "
-                 "so the new rows bend rather than fold (the surface did "
-                 "not move).")
+                 f"so the new rows bend rather than fold — that is {extra} "
+                 f"row{'s' if extra != 1 else ''} of its own, once, on top "
+                 "of the one you asked for (the surface did not move).")
 
 
 @command("changedegree")
