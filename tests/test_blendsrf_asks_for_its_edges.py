@@ -120,7 +120,7 @@ def test_the_blend_appears_at_once_and_a_typed_bulge_reshapes_it(win):
     made = [o for o in win.scene.all() if o.id not in (a.id, b.id)]
     assert len(made) == 1
     even = g.bbox(made[0].shape)
-    assert "Bulge=1" in win.processor.prompt_text()
+    assert ("Bulge", "1") in win.processor.option_chips()
     ghost = win.processor.preview_shape("2")
     assert ghost is not None, "a typed bulge ghosts before it lands"
     win.processor.provide_text("2")
@@ -143,8 +143,7 @@ def test_position_continuity_runs_straight_across(win):
                                   (b.id, "edge", _edge_at_y(b, 30))])
     win.processor.run("blendsrf")
     made = [o for o in win.scene.all() if o.id not in (a.id, b.id)][0]
-    win.processor.provide_text("Continuity")
-    win.processor.provide_text("Position")
+    win.processor.provide_text("Continuity=Position")
     lo, hi = g.bbox(win.scene.get(made.id).shape)
     assert lo[2] > -0.01 and hi[2] < 5.01, "no belly: straight between"
     win.processor.provide_text("")
@@ -197,3 +196,37 @@ def test_an_edge_of_a_mesh_is_named_as_the_reason(win):
     win.processor.provide_text("")
     assert not win.processor.busy
     assert "1 usable of 2 picked" in "\n".join(said)
+
+
+def test_the_chips_reshape_the_blend_as_you_drag(win):
+    """Bulge is a chip you drag and the blend follows; Continuity flips
+    on a click. The history hears the drag once, at its end."""
+    from serpentine3d.ui.command_line import ScrubChip
+    a, b = _two_surfaces_with_a_gap(win.scene)
+    win.selection.set_subobjects([(a.id, "edge", _edge_at_y(a, 0)),
+                                  (b.id, "edge", _edge_at_y(b, 30))])
+    said = []
+    win.processor.ctx.add_echo_listener(said.append)
+    win.processor.run("blendsrf")
+    QApplication.processEvents()
+    made = [o for o in win.scene.all() if o.id not in (a.id, b.id)][0]
+    even = g.bbox(made.shape)[1][2]
+    chips = {c.name: c for c in win.command_line._chips}
+    assert isinstance(chips["Bulge"], ScrubChip)
+    # a drag, in pieces, the way the mouse sends it
+    proc = win.processor
+    for v in (1.3, 1.6, 2.0):
+        proc.set_option("Bulge", f"{v:g}", quiet=True)
+        assert g.bbox(win.scene.get(made.id).shape)[1][2] > even, \
+            "the blend follows the drag"
+    proc.set_option("Bulge", "2")
+    assert said.count("Bulge=2") == 1
+    fat = g.bbox(win.scene.get(made.id).shape)[1][2]
+    assert fat > even + 1
+    chips["Continuity"].click()
+    assert proc.option("Continuity", "Tangent") == "Position"
+    lo, hi = g.bbox(win.scene.get(made.id).shape)
+    assert lo[2] > -0.01 and hi[2] < 5.01, "straight across now"
+    proc.provide_text("")
+    assert not proc.busy
+    assert "bulge 2, position" in said[-1]
