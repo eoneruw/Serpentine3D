@@ -26,7 +26,7 @@ def _place(ctx, obj, shape) -> list:
     if not pieces:
         return [ctx.scene.replace_shape(obj.id, shape)]
     out = [ctx.scene.replace_shape(obj.id, pieces[0])]
-    out.extend(ctx.scene.add(p, layer_id=obj.layer_id) for p in pieces[1:])
+    out.extend(ctx.scene.add_from(p, obj) for p in pieces[1:])
     return out
 
 

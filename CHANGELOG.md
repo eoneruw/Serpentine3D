@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A surface made from a painted surface is painted the same.** Offset,
+  blend, extract, explode, split, trim and boolean split carried the
+  layer across but not the colour or material, so a red car-paint
+  panel gave grey offsets and blends. They go through the scene's
+  add_from now, and the paint comes with them.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
