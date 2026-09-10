@@ -42,7 +42,8 @@ class OsnapBar(QWidget):
             "and keep the settings")
         self._master.setStyleSheet(
             "QToolButton { font-size: 11px; padding: 1px 7px; "
-            "font-weight: bold; }")
+            "font-weight: bold; }"
+            "QToolButton:!checked { color: #8a8b90; }")
         self._master.setChecked(viewport.snaps.enabled)
         self._master.toggled.connect(self._master_toggled)
         layout.addWidget(self._master)
@@ -75,8 +76,15 @@ class OsnapBar(QWidget):
         btn.setText(text)
         btn.setToolTip(tip)
         btn.setCheckable(True)
+        # The theme colours every tool button the same, disabled or not,
+        # so a paused snap looked exactly like a live one. Paused is dim:
+        # the text goes grey, a lit one keeps a ghost of its gold.
         btn.setStyleSheet(
-            "QToolButton { font-size: 11px; padding: 1px 7px; }")
+            "QToolButton { font-size: 11px; padding: 1px 7px; }"
+            "QToolButton:disabled { color: #56575c; background: #232427;"
+            " border-color: transparent; }"
+            "QToolButton:checked:disabled { color: #7a6a4a;"
+            " background: #2c2a26; border-color: #4a4230; }")
         return btn
 
     def _master_toggled(self, on: bool):
