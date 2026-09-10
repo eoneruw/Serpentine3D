@@ -21,7 +21,8 @@
   to, puts the blend on screen at once, and stays open for a Bulge
   (type a number: 1 is the even S-curve, less is tauter, more bellies
   out — it ghosts as you type) and a Continuity (Tangent or Position);
-  Enter keeps it, Escape takes it away. A pick it cannot use — an edge
+  Enter keeps it, Escape takes it away. Bulge is a chip you drag and
+  the blend follows as you go; Continuity flips on a click. A pick it cannot use — an edge
   of a mesh, a face — is named as the reason before it asks for more.
 
 
