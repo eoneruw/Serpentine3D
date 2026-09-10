@@ -169,3 +169,27 @@ def test_mouse_and_keys_are_logged_with_what_was_held(win, runlog):
     assert "press Shift+Ctrl+LMB at 120,80" in text
     assert "release Shift+Ctrl+LMB at 120,80" in text
     assert "key Del" in text
+
+
+def test_a_click_says_what_it_came_to(win, runlog):
+    from PySide6.QtCore import QEvent, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    vp = win.viewport
+    for kind, b, bs in ((QEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton,
+                         Qt.MouseButton.LeftButton),
+                        (QEvent.Type.MouseButtonRelease,
+                         Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton)):
+        QApplication.sendEvent(vp, QMouseEvent(kind, QPointF(20, 20), b, bs,
+                                               Qt.KeyboardModifier.NoModifier))
+    text = _text(runlog)
+    assert "pick  nothing" in text
+    win.processor.run("line")
+    for kind, b, bs in ((QEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton,
+                         Qt.MouseButton.LeftButton),
+                        (QEvent.Type.MouseButtonRelease,
+                         Qt.MouseButton.LeftButton, Qt.MouseButton.NoButton)):
+        QApplication.sendEvent(vp, QMouseEvent(kind, QPointF(20, 20), b, bs,
+                                               Qt.KeyboardModifier.NoModifier))
+    text = _text(runlog)
+    assert "point-mode" in text, "a press says the pane was waiting for a point"
+    win.processor.cancel()
