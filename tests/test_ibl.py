@@ -71,7 +71,7 @@ def test_the_roughness_ladder_gets_smaller_and_smoother():
 
 
 def test_the_ladder_is_built_once():
-    ibl.studio_lighting.cache_clear()
+    ibl.lighting.cache_clear()
     a = ibl.studio_lighting()
     b = ibl.studio_lighting()
     assert a is b
