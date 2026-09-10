@@ -152,10 +152,54 @@ def mesh_quality() -> str:
     return _QUALITY
 
 
+# While a control point or a gumball handle is being dragged, the shape is
+# cut again on every mouse move. At Fine that is fine; at Very fine a
+# bonnet takes over a second a cut, and the drag stops following the
+# mouse. So a drag meshes at Normal — what every drag got before there
+# was a setting — and the real quality comes back on release, when the
+# objects that moved are cut once more, properly.
+_PREVIEW = 0
+_PREVIEW_QUALITY = "normal"
+_ORDER = list(MESH_QUALITIES)
+
+
+def begin_preview():
+    """Mesh at no finer than Normal until the matching end_preview()."""
+    global _PREVIEW
+    _PREVIEW += 1
+
+
+def end_preview():
+    global _PREVIEW
+    _PREVIEW = max(0, _PREVIEW - 1)
+
+
+def preview_is_coarser() -> bool:
+    """Whether a preview cut is any different from the real one — when it
+    is not, a drag's meshes are as good as final and can be kept."""
+    return _ORDER.index(_QUALITY) > _ORDER.index(_PREVIEW_QUALITY)
+
+
+def _active_quality() -> str:
+    if _PREVIEW and preview_is_coarser():
+        return _PREVIEW_QUALITY
+    return _QUALITY
+
+
 def _deflection_for(shape) -> float:
     (mn, mx) = geometry.bbox(shape)
     diag = float(np.linalg.norm(np.subtract(mx, mn)))
-    return max(diag * MESH_QUALITIES[_QUALITY][0], 1e-4)
+    return max(diag * MESH_QUALITIES[_active_quality()][0], 1e-4)
+
+
+def _meshed_finer_than(shape, deflection: float) -> bool:
+    """Whether the shape already carries a triangulation cut well finer
+    (under half the deflection) than what is being asked for."""
+    exp = TopExp_Explorer(shape, occ.FACE)
+    if not exp.More():
+        return False
+    tri = occ.triangulation(occ.to_face(exp.Current()), TopLoc_Location())
+    return tri is not None and tri.Deflection() < deflection * 0.5
 
 
 def default_deflection(shape) -> float:
@@ -429,8 +473,14 @@ def tessellate(shape, deflection: float | None = None,
     if deflection is None:
         deflection = _deflection_for(shape)
     if angular is None:
-        angular = MESH_QUALITIES[_QUALITY][1]
+        angular = MESH_QUALITIES[_active_quality()][1]
     if geometry.shape_kind(shape) != "curve":
+        if _meshed_finer_than(shape, deflection):
+            # The mesher keeps a triangulation that is already finer than
+            # asked, so going back from Very fine to Normal would keep
+            # every Very fine mesh — and none of the speed it was left for.
+            from OCP.BRepTools import BRepTools
+            BRepTools.Clean_s(shape)
         BRepMesh_IncrementalMesh(shape, deflection, False, angular, True)
 
     all_verts, all_norms, all_tris, all_curv, isos = [], [], [], [], []

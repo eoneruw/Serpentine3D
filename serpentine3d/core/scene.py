@@ -343,10 +343,15 @@ class Scene:
         self.notify("objects")
         return obj
 
-    def drop_meshes(self):
-        """Forget every display mesh, so the next frame cuts them afresh —
-        after the mesh quality changes. The geometry is untouched."""
-        for obj in self.objects.values():
+    def drop_meshes(self, ids=None):
+        """Forget the display meshes (of `ids`, or of everything), so the
+        next frame cuts them afresh — after the mesh quality changes, or
+        after a drag that meshed at preview quality. The geometry is
+        untouched."""
+        objs = (self.objects.values() if ids is None
+                else [o for o in (self.objects.get(i) for i in ids)
+                      if o is not None])
+        for obj in objs:
             obj._mesh = None
         self.notify("objects")
 

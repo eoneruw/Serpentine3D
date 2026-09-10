@@ -10,7 +10,10 @@
   Rendered reads the normal between a triangle's corners, so a big
   triangle across a gently curved bonnet showed the triangle edges as
   creases in the highlight; Fine or Very fine cuts the panel finely enough
-  that they go. Coarse keeps a scan-heavy scene quick.
+  that they go. Coarse keeps a scan-heavy scene quick. Dragging a control
+  point or a gumball handle meshes at Normal whatever the setting — at Very
+  fine a bonnet takes over a second a cut, and the drag stopped following
+  the mouse — and what moved is cut properly again on release.
 
 - **Environments for the PBR mode.** One procedural studio lit
   everything; now the Display panel (mode Rendered (PBR)) and the
