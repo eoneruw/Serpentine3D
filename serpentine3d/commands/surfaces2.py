@@ -502,10 +502,11 @@ def cmd_blendsrf(ctx):
     bulge = 1.0
     continuity = "Tangent"
 
-    def build(b, cont):
+    def build(b, cont, sections=g.BLEND_SECTIONS):
         return g.blend_between_edges(
             fa, ea, fb, eb, bulge=b,
-            continuity="G0" if cont == "Position" else "G1")
+            continuity="G0" if cont == "Position" else "G1",
+            sections=int(sections))
 
     try:
         shape = build(bulge, continuity)
@@ -538,35 +539,42 @@ def _shape_the_blend(ctx, obj, build, bulge, continuity):
     Continuity is a chip a click flips between Tangent and Position.
     A typed number is a bulge too, and Bulge=2 the long way round.
     """
-    state = {"bulge": bulge, "continuity": continuity}
+    state = {"bulge": bulge, "continuity": continuity,
+             "sections": g.BLEND_SECTIONS}
 
     def rebuild(name, value):
         want = dict(state)
         if name == "Bulge":
             want["bulge"] = float(value)
+        elif name == "Sections":
+            want["sections"] = int(float(value))
         else:
             want["continuity"] = value
         # raises GeometryError for set_option to report; the last good
         # blend stays on screen and the state stays with it
-        shape = build(want["bulge"], want["continuity"])
+        shape = build(want["bulge"], want["continuity"], want["sections"])
         state.update(want)
         ctx.scene.replace_shape(obj.id, shape)
 
     def ghost(v):
         if isinstance(v, (int, float)) and v > 0:
             try:
-                return build(float(v), state["continuity"])
+                return build(float(v), state["continuity"],
+                             state["sections"])
             except g.GeometryError:
                 return None
         return None
 
     while True:
-        p = yield PointReq("Blend: drag Bulge, click Continuity, Enter to "
-                           "keep it",
+        p = yield PointReq("Blend: drag Bulge or Sections, click "
+                           "Continuity, Enter to keep it",
                            allow_empty=True, allow_number=True,
                            choices={"Bulge": Scrub(state["bulge"], 0.05,
                                                    5.0, step=0.01),
-                                    "Continuity": ["Tangent", "Position"]},
+                                    "Continuity": ["Tangent", "Position"],
+                                    "Sections": Scrub(state["sections"],
+                                                      3, 60, step=0.1,
+                                                      integer=True)},
                            on_option=rebuild, preview_fn=ghost)
         if p is None or isinstance(p, (tuple, list)):
             break
@@ -579,4 +587,5 @@ def _shape_the_blend(ctx, obj, build, bulge, continuity):
             except g.GeometryError as exc:
                 ctx.echo(f"Bulge {p:g}: {exc}")
     ctx.echo(f"Created blend {obj.name} (bulge {state['bulge']:g}, "
-             f"{state['continuity'].lower()}).")
+             f"{state['continuity'].lower()}, {state['sections']} "
+             "sections).")

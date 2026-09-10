@@ -256,3 +256,25 @@ def test_a_v_shaped_gap_blends_to_a_point_where_the_edges_meet():
     assert g.surface_area(ruled) == pytest.approx(100 * 40 / 2, rel=0.02)
     with pytest.raises(g.GeometryError, match="lie on each other"):
         g.blend_between_edges(fa, ea, fa, ea)
+
+
+def test_sections_say_how_many_rows_the_blend_has(win):
+    """Fewer sections, fewer rows of control points along the edge to
+    pull on; more to hug a wavy edge. A chip you drag, like the bulge."""
+    a, b = _two_surfaces_with_a_gap(win.scene)
+    win.selection.set_subobjects([(a.id, "edge", _edge_at_y(a, 0)),
+                                  (b.id, "edge", _edge_at_y(b, 30))])
+    proc = win.processor
+    proc.run("blendsrf")
+    made = [o for o in win.scene.all() if o.id not in (a.id, b.id)][0]
+    assert ("Sections", str(g.BLEND_SECTIONS)) in proc.option_chips()
+    _, (nu0, nv0) = g.surface_control_points(made.shape)
+    proc.set_option("Sections", "4")
+    _, (nu1, nv1) = g.surface_control_points(win.scene.get(made.id).shape)
+    proc.set_option("Sections", "30")
+    _, (nu2, nv2) = g.surface_control_points(win.scene.get(made.id).shape)
+    along = lambda nu, nv: max(nu, nv)          # noqa: E731
+    assert along(nu1, nv1) < along(nu0, nv0) < along(nu2, nv2)
+    assert min(nu1, nv1) == 4, "cubic across the gap, whatever the count"
+    proc.provide_text("")
+    assert not proc.busy
