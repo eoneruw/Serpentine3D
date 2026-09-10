@@ -2267,6 +2267,79 @@ def _surface_uv_at(bs, point) -> tuple[float, float]:
     return float(uv.X()), float(uv.Y())
 
 
+SMOOTH_DEGREE = 3       # what a row of handles needs to bend rather than fold
+
+
+def _lift_degree_for_rows(bs, direction: str) -> list[str]:
+    """Raise the surface to SMOOTH_DEGREE in the direction a knot row is
+    going in, if it is degree 1 there. Exact — the surface does not
+    move — and it is what makes the new rows bend: a loft between two
+    curves is degree 1 between them, and rows put into a degree-1
+    surface are corners, however you drag them. Degree 2 bends already
+    and is left alone. Returns the directions lifted."""
+    want = direction.lower()
+    lifted = []
+    u_deg = bs.UDegree()
+    v_deg = bs.VDegree()
+    if want in ("u", "both") and u_deg < 2:
+        u_deg = SMOOTH_DEGREE
+        lifted.append("U")
+    if want in ("v", "both") and v_deg < 2:
+        v_deg = SMOOTH_DEGREE
+        lifted.append("V")
+    if lifted:
+        bs.IncreaseDegree(u_deg, v_deg)
+    return lifted
+
+
+def surface_degrees(shape) -> tuple[int, int]:
+    """(u degree, v degree) of a single-face surface."""
+    bs, _face = _face_bspline_surface(shape)
+    return bs.UDegree(), bs.VDegree()
+
+
+def change_surface_degree(shape, u: int | None = None,
+                          v: int | None = None) -> TopoDS_Shape:
+    """The surface raised to these degrees — exactly, without moving.
+
+    Rhino's ChangeDegree. Only upward: a degree cannot be lowered
+    without the surface moving, and `rebuild` is the honest way to do
+    that. A degree of 1 in one direction is why rows put into a loft
+    fold rather than bend; raising it to 3 is the cure.
+    """
+    bs, _face = _face_bspline_surface(shape)
+    want_u = bs.UDegree() if u is None else int(u)
+    want_v = bs.VDegree() if v is None else int(v)
+    if want_u < bs.UDegree() or want_v < bs.VDegree():
+        raise GeometryError("A degree can only be raised here — lowering "
+                            "one moves the surface; use rebuild for that")
+    if want_u > 25 or want_v > 25:
+        raise GeometryError("Degree is limited to 25")
+    if (want_u, want_v) != (bs.UDegree(), bs.VDegree()):
+        bs.IncreaseDegree(want_u, want_v)
+    mk = BRepBuilderAPI_MakeFace(bs, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    return mk.Face()
+
+
+def change_curve_degree(shape, degree: int) -> TopoDS_Shape:
+    """The curve raised to `degree` — exactly, without moving. Only
+    upward, like change_surface_degree."""
+    splines = _splines_of(shape)
+    degree = int(degree)
+    if degree > 25:
+        raise GeometryError("Degree is limited to 25")
+    for bs in splines:
+        if degree < bs.Degree():
+            raise GeometryError("A degree can only be raised here — "
+                                "lowering one moves the curve; use "
+                                "rebuild for that")
+        if degree > bs.Degree():
+            bs.IncreaseDegree(degree)
+    return _curve_from_splines(splines)
+
+
 def insert_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
     """A copy of the surface with a knot row added through `point`.
 
@@ -2284,6 +2357,7 @@ def insert_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
     want = direction.lower()
     if want not in ("u", "v", "both"):
         raise GeometryError("direction is u, v or both")
+    _lift_degree_for_rows(bs, want)
     eps_u = max(abs(u1 - u0), 1.0) * 1e-6
     eps_v = max(abs(v1 - v0), 1.0) * 1e-6
     try:
@@ -2311,6 +2385,7 @@ def insert_surface_knots_at_spans(shape) -> TopoDS_Shape:
     """A knot in the middle of every span, both ways: Automatic for a
     surface. Roughly four times the handles, and the surface unmoved."""
     bs, _face = _face_bspline_surface(shape)
+    _lift_degree_for_rows(bs, "both")
     for getter, count, insert in ((bs.UKnot, bs.NbUKnots(), bs.InsertUKnot),
                                   (bs.VKnot, bs.NbVKnots(), bs.InsertVKnot)):
         knots = [getter(i) for i in range(1, count + 1)]

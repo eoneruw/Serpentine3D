@@ -4,6 +4,31 @@
 
 ### Added
 
+- **Rows put into a loft bend rather than fold.** A loft between two
+  curves is degree 1 across — straight between them — so rows of
+  control points put into that direction and dragged made corners,
+  not curves, and Weight on them did nothing. `insertknot` now raises
+  a degree-1 direction to 3 first (exactly: the surface does not
+  move) and says so; `changedegree` does the same by hand, on curves
+  and surfaces, U, V or both.
+
+## Unreleased
+
+### Added
+
+- **`weight` pulls a curve or surface toward its control points.**
+  Rhino's Weight: hold one or more control points, run it, and drag
+  the Weight chip — above 1 the shape tightens in toward the point,
+  high enough and the turn is nearly a kink with no knot added; below
+  1 it goes soft. The shape follows the drag; Enter keeps it, Escape
+  puts it back. The points stay where they are.
+- **A rolling run log.** Every launch writes a log of itself — machine
+  and driver, files opened, every command-line echo, what was selected
+  when, mouse buttons and keys in the viewport, Qt warnings and Python
+  tracebacks — to `logs/` beside a source checkout or the user data
+  directory; `latest.log` points at the newest and the last ten are
+  kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
+  now comes with the traceback that did it.
 - **A row of control points comes off a surface.** `removeknot` takes
   surfaces now, with a Direction (U row, V column, Both) and the
   surface ghosted as it will be; and Delete on held surface control

@@ -420,7 +420,9 @@ def cmd_insertknot(ctx):
                 before = count(o)
                 try:
                     if o.kind == "surface":
+                        was = g.surface_degrees(o.shape)
                         shape = g.insert_surface_knots_at_spans(o.shape)
+                        _say_if_lifted(ctx, o, was, shape)
                     else:
                         shape = g.insert_knots_at_spans(o.shape)
                 except g.GeometryError as exc:
@@ -435,7 +437,9 @@ def cmd_insertknot(ctx):
         before = count(o)
         try:
             if o.kind == "surface":
+                was = g.surface_degrees(o.shape)
                 shape = g.insert_surface_knot(o.shape, p, direction)
+                _say_if_lifted(ctx, o, was, shape)
             else:
                 shape = g.insert_knot(o.shape, p)
             ctx.scene.replace_shape(o.id, shape)
@@ -445,6 +449,57 @@ def cmd_insertknot(ctx):
         added += count(ctx.scene.get(o.id)) - before
     ctx.echo(f"Added {added} control point(s)." if added
              else "Nothing added.")
+
+
+def _say_if_lifted(ctx, o, was, shape):
+    """A row put into a degree-1 direction would fold, so insertknot
+    raises the degree first; that is worth a line, once per object."""
+    now = g.surface_degrees(shape)
+    if now != was:
+        which = " and ".join(d for d, a, b in zip("UV", was, now) if a != b)
+        ctx.echo(f"{o.name}: raised to degree {g.SMOOTH_DEGREE} in {which} "
+                 "so the new rows bend rather than fold (the surface did "
+                 "not move).")
+
+
+@command("changedegree")
+def cmd_changedegree(ctx):
+    """Raise the degree of a curve or surface without moving it.
+
+    Rhino's ChangeDegree. A loft between two curves is degree 1 across —
+    straight between them — so control points put into it fold rather
+    than bend and Weight does nothing across; degree 3 is what a
+    surface you mean to sculpt wants. Only upward: lowering a degree
+    moves the shape, and `rebuild` is the honest way to do that.
+    """
+    from .base import IntReq
+    objs = yield SelectReq("Select curves or surfaces to raise the degree "
+                           "of", kinds=("curve", "surface"))
+    surfaces = [o for o in objs if o.kind == "surface"]
+    curves = [o for o in objs if o.kind == "curve"]
+    if surfaces:
+        which = yield OptionReq("Direction", options=["U", "V", "Both"],
+                                default="Both")
+    degree = yield IntReq("Degree", default=g.SMOOTH_DEGREE, minimum=1)
+    done = 0
+    for o in curves:
+        try:
+            ctx.scene.replace_shape(o.id, g.change_curve_degree(o.shape,
+                                                                degree))
+            done += 1
+        except g.GeometryError as exc:
+            ctx.echo(f"{o.name}: {exc}")
+    for o in surfaces:
+        try:
+            u = degree if which in ("U", "Both") else None
+            v = degree if which in ("V", "Both") else None
+            ctx.scene.replace_shape(o.id, g.change_surface_degree(o.shape,
+                                                                  u, v))
+            done += 1
+        except g.GeometryError as exc:
+            ctx.echo(f"{o.name}: {exc}")
+    ctx.echo(f"Degree {degree} on {done} object(s)." if done
+             else "Nothing changed.")
 
 
 @command("removeknot")

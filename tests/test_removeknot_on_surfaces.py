@@ -25,7 +25,8 @@ def _isolated_config(tmp_path, monkeypatch):
 
 
 def _panel():
-    """A 5x5 grid of control points: a loft with two rounds of rows."""
+    """A 7x7 grid of control points: a loft of two lines (degree 1 both
+    ways, lifted to 3 by the first rows) with two rounds of rows."""
     srf = g.loft([g.make_line((0, 0, 0), (100, 0, 0)),
                   g.make_line((0, 50, 0), (100, 50, 10))])
     return g.insert_surface_knots_at_spans(
@@ -36,13 +37,13 @@ def _panel():
 
 def test_a_u_row_or_a_v_column_comes_out():
     srf = _panel()
-    assert g.surface_control_points(srf)[1] == (5, 5)
+    assert g.surface_control_points(srf)[1] == (7, 7)
     assert g.surface_control_points(
-        g.remove_surface_knot(srf, (50, 25, 2), "u"))[1] == (4, 5)
+        g.remove_surface_knot(srf, (50, 25, 2), "u"))[1] == (6, 7)
     assert g.surface_control_points(
-        g.remove_surface_knot(srf, (50, 25, 2), "v"))[1] == (5, 4)
+        g.remove_surface_knot(srf, (50, 25, 2), "v"))[1] == (7, 6)
     assert g.surface_control_points(
-        g.remove_surface_knot(srf, (50, 25, 2), "both"))[1] == (4, 4)
+        g.remove_surface_knot(srf, (50, 25, 2), "both"))[1] == (6, 6)
 
 
 def test_a_row_that_held_nothing_costs_nothing():
@@ -64,9 +65,9 @@ def test_held_points_take_their_row_or_column_with_them():
     srf = _panel()
     _, (nu, nv) = g.surface_control_points(srf)
     out, what = g.delete_surface_control_rows(srf, [2 * nv + 0, 2 * nv + 3])
-    assert g.surface_control_points(out)[1] == (4, 5) and "row" in what
+    assert g.surface_control_points(out)[1] == (6, 7) and "row" in what
     out, what = g.delete_surface_control_rows(srf, [1 * nv + 2, 3 * nv + 2])
-    assert g.surface_control_points(out)[1] == (5, 4) and "column" in what
+    assert g.surface_control_points(out)[1] == (7, 6) and "column" in what
     with pytest.raises(g.GeometryError, match="one row or one column"):
         g.delete_surface_control_rows(srf, [0, 2 * nv + 3])
 
@@ -93,10 +94,10 @@ def test_delete_on_held_surface_points_takes_the_row_out(win):
     win.selection.set_subobjects([(o.id, "cv", 2 * nv + 1),
                                   (o.id, "cv", 2 * nv + 3)])
     win.processor.run("delete")
-    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (4, 5)
+    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (6, 7)
     assert any("row" in line and "moved by" in line for line in said), said
     win.processor.run("undo")
-    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (5, 5)
+    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (7, 7)
 
 
 def test_removeknot_takes_surfaces_with_a_direction(win):
@@ -110,6 +111,6 @@ def test_removeknot_takes_surfaces_with_a_direction(win):
     win.processor.provide_text("Direction")
     win.processor.provide_text("V")
     win.processor.provide_text("50,25,2")
-    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (5, 4)
+    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (7, 6)
     win.processor.provide_text("")
     assert not win.processor.busy
