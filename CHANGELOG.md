@@ -14,6 +14,8 @@
   older build, a two-face polysurface — and gives one surface with one
   net of control points: exactly when the two are really one surface
   cut in two, otherwise fitted through both with the deviation reported.
+  And `rebuild` takes surfaces now — a count each way and a degree —
+  which is how a dense fit comes down to a net you can pull on.
   Both, and Explode, are in the Actions panel for a surface.
 - **Mesh quality.** The Display panel has a **Mesh** row — Coarse, Normal,
   Fine, Very fine — and a `meshquality` command, remembered in settings.
