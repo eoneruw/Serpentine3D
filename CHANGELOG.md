@@ -4,12 +4,31 @@
 
 ### Added
 
+- **Rows put into a loft bend rather than fold.** A loft between two
+  curves is degree 1 across — straight between them — so rows of
+  control points put into that direction and dragged made corners,
+  not curves, and Weight on them did nothing. `insertknot` now raises
+  a degree-1 direction to 3 first (exactly: the surface does not
+  move) and says so; `changedegree` does the same by hand, on curves
+  and surfaces, U, V or both.
 - **`weight` pulls a curve or surface toward its control points.**
   Rhino's Weight: hold one or more control points, run it, and drag
   the Weight chip — above 1 the shape tightens in toward the point,
   high enough and the turn is nearly a kink with no knot added; below
   1 it goes soft. The shape follows the drag; Enter keeps it, Escape
   puts it back. The points stay where they are.
+- **Option chips you can drag.** An option that is a number — a
+  `Scrub(...)` in a request's `choices` — shows as a chip beside the
+  prompt that you press and drag sideways, the value running between
+  its limits (Shift for a finer hand, wheel to nudge); a list chip
+  still cycles on a click. A request's `on_option` hears every change
+  as it happens, so a command can rebuild what it is making while you
+  look at it, and the history is told once, when you let go. And every
+  prompt that takes a number at all — fillet radius, offset distance,
+  extrusion height, pipe radius, wall thickness, a count, an angle —
+  carries a chip of its own: drag it and the number runs into the
+  input line with the gold ghost following; Enter takes it. Nothing
+  per command, so it is there for all of them.
 - **A rolling run log.** Every launch writes a log of itself — machine
   and driver, files opened, every command-line echo, what was selected
   when, mouse buttons and keys in the viewport, Qt warnings and Python
@@ -23,27 +42,8 @@
   points takes out the row or column they sit on, since a surface's
   points come in rows and one cannot go alone. Both say how far the
   surface moved. Delete used to answer "Not a curve" and do nothing.
-- **Option chips you can drag.** An option that is a number — a
-  `Scrub(...)` in a request's `choices` — shows as a chip beside the
-  prompt that you press and drag sideways, the value running between
-  its limits (Shift for a finer hand, wheel to nudge); a list chip
-  still cycles on a click. A request's `on_option` hears every change
-  as it happens, so a command can rebuild what it is making while you
-  look at it, and the history is told once, when you let go. And every
-  prompt that takes a number at all — fillet radius, offset distance,
-  extrusion height, pipe radius, wall thickness, a count, an angle —
-  carries a chip of its own: drag it and the number runs into the
-  input line with the gold ghost following; Enter takes it. Nothing
-  per command, so it is there for all of them.
 
 ### Fixed
-
-- **A held edge on a plain surface no longer turns the gumball into a
-  fillet handle.** The handle asked OCCT to fillet a border edge — one
-  face, nothing to round between — and OCCT raised from inside the
-  mouse handler on every pixel of the drag. The handle is offered only
-  for an edge two faces share, and a fillet that fails is a
-  GeometryError the gumball swallows, not a traceback.
 
 - **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
   Run with nothing picked it printed an instruction and ended; with two
@@ -60,19 +60,12 @@
   Bezier across, exactly the sections, tangent to both surfaces to
   within thousandths of a degree at the default twelve. A pick it cannot use — an edge
   of a mesh, a face — is named as the reason before it asks for more.
-
-
-
-- **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
-  Run with nothing picked it printed an instruction and ended; with two
-  edges that would not take a tangent blend it raised. Both looked like
-  a command doing nothing. Now it prompts for the two edges when it has
-  to, puts the blend on screen at once, and stays open for a Bulge
-  (type a number: 1 is the even S-curve, less is tauter, more bellies
-  out — it ghosts as you type) and a Continuity (Tangent or Position);
-  Enter keeps it, Escape takes it away. Bulge is a chip you drag and
-  the blend follows as you go; Continuity flips on a click. A pick it cannot use — an edge
-  of a mesh, a face — is named as the reason before it asks for more.
+- **A held edge on a plain surface no longer turns the gumball into a
+  fillet handle.** The handle asked OCCT to fillet a border edge — one
+  face, nothing to round between — and OCCT raised from inside the
+  mouse handler on every pixel of the drag. The handle is offered only
+  for an edge two faces share, and a fillet that fails is a
+  GeometryError the gumball swallows, not a traceback.
 - **Ctrl+Shift-clicking a mesh no longer blacks out the view.** The pick
   held a mesh "face"; the gumball asked for the B-rep faces of a mesh
   on every mouse move, the explorer refused with a TypeError, and with
@@ -85,7 +78,6 @@
   and nothing picked. Meta now counts as Ctrl for sub-object picks and
   for holding control points, and the fabricated right click carries the
   pick when Shift is down. ⌘+Shift works as it always did.
-
 
 ## 0.9.1 — 2026-09-08
 
