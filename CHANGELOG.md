@@ -100,6 +100,13 @@
   derived curves. Point-cloud Properties presents heuristic surface support,
   camera/scale provenance, reconstruction backbone and producer limitations.
 
+### Changed
+
+- **The word Osnap is the switch.** The bar had a label and, beside it,
+  an "On" button that read as one more snap type. Now the word itself
+  is a button: click it and every snap is paused, the type buttons
+  greyed but keeping their settings; click again and it is all back.
+
 ## 0.10.3 — 2026-09-19
 
 ### Fixed
