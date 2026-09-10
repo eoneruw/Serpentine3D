@@ -275,3 +275,29 @@ def test_the_gumballs_scale_box_works_on_a_picture_and_a_mesh():
                   np.array([[0, 1, 2]], np.uint32))
     r = g.scale_along_axis(m, (0, 0, 0), (0, 1, 0), 3.0)
     assert np.allclose(r.vertices[2], (0, 30, 0))
+
+
+def test_drawing_a_picture_leaves_texture_unit_0_as_it_found_it(win, image):
+    """A display mode lit by an environment map keeps its map on unit 0
+    for the frame; a picture drawn mid-frame bound its own image there
+    and the objects after it reflected the blueprint — coming and going
+    as the view changed the draw order."""
+    _gl(win)
+    from OpenGL import GL
+    vp = win.viewport
+    _drop(vp, image)
+    o = win.scene.all()[0]
+    for _ in range(3):                    # a frame, so the picture is on the GPU
+        vp.update()
+        QApplication.processEvents()
+    gpu = vp._gpu.get(o.id)
+    assert gpu is not None
+    vp.makeCurrent()
+    try:
+        probe = GL.glGenTextures(1)
+        GL.glActiveTexture(GL.GL_TEXTURE0)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, probe)
+        vp._draw_picture(o, gpu, np.eye(4, dtype=np.float32))
+        assert int(GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D)) == probe
+    finally:
+        vp.doneCurrent()
