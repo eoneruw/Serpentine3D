@@ -23,7 +23,26 @@
   its limits (Shift for a finer hand, wheel to nudge); a list chip
   still cycles on a click. A request's `on_option` hears every change
   as it happens, so a command can rebuild what it is making while you
-  look at it, and the history is told once, when you let go.
+  look at it, and the history is told once, when you let go. And every
+  prompt that takes a number at all — fillet radius, offset distance,
+  extrusion height, pipe radius, wall thickness, a count, an angle —
+  carries a chip of its own: drag it and the number runs into the
+  input line with the gold ghost following; Enter takes it. Nothing
+  per command, so it is there for all of them.
+
+### Fixed
+
+- **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
+  Run with nothing picked it printed an instruction and ended; with two
+  edges that would not take a tangent blend it raised. Both looked like
+  a command doing nothing. Now it prompts for the two edges when it has
+  to, puts the blend on screen at once, and stays open for a Bulge
+  (type a number: 1 is the even S-curve, less is tauter, more bellies
+  out — it ghosts as you type) and a Continuity (Tangent or Position);
+  Enter keeps it, Escape takes it away. Bulge is a chip you drag and
+  the blend follows as you go; Continuity flips on a click. A pick it cannot use — an edge
+  of a mesh, a face — is named as the reason before it asks for more.
+
 
 ### Fixed
 

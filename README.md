@@ -118,7 +118,10 @@ Command options appear as **clickable chips** under the prompt
 Rhino-style (`cap=n`) at any moment without losing your place; an
 option that is a number (`Bulge=1`) is a chip you **drag** sideways,
 Shift for a finer hand, and a command that rebuilds live shows the
-result as you drag. Numeric prompts show a live **gold ghost preview**
+result as you drag. Every prompt that takes a number — a fillet radius,
+an offset distance, an extrusion height, a count — carries a chip of
+its own: drag it and the number runs into the input line with the
+ghost following; Enter takes it. Numeric prompts show a live **gold ghost preview**
 of the result while you type. `help` (or F1) opens a searchable command reference. Arrow keys
 nudge the selection along the CPlane (Shift ×10, Ctrl ×0.1).
 
