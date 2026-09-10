@@ -872,12 +872,31 @@ def fillet_edges(shape, radius, edges: list | None = None,
             mk.Add(r_pair[0], r_pair[1], e)
         else:
             mk.Add(float(radius), e)
-    mk.Build()
-    if not mk.IsDone() or mk.Shape().IsNull():
+    try:
+        mk.Build()
+        done = mk.IsDone() and not mk.Shape().IsNull()
+    except Exception as exc:                               # noqa: BLE001
+        # OCCT raises Standard_Failure rather than failing quietly for an
+        # edge with one face — a surface's border — and a raise from a
+        # mouse handler is a raise on every move
+        raise GeometryError(f"Fillet failed — {exc}") from exc
+    if not done:
         raise GeometryError(
             "Fillet failed — the radius is probably too large for "
             "the smallest edges; try a smaller value")
     return unwrap_compound(mk.Shape())
+
+
+def edge_is_shared(shape, edge) -> bool:
+    """Does the edge sit between two faces of the shape? A fillet needs
+    two faces to round between; a surface's border has one."""
+    n = 0
+    for f in faces_of(shape):
+        if any(e.IsSame(edge) for e in edges_of(f)):
+            n += 1
+            if n >= 2:
+                return True
+    return False
 
 
 def face_normal(face) -> Point:

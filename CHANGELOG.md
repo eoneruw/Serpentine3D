@@ -38,6 +38,13 @@
 
 ### Fixed
 
+- **A held edge on a plain surface no longer turns the gumball into a
+  fillet handle.** The handle asked OCCT to fillet a border edge — one
+  face, nothing to round between — and OCCT raised from inside the
+  mouse handler on every pixel of the drag. The handle is offered only
+  for an edge two faces share, and a fillet that fails is a
+  GeometryError the gumball swallows, not a traceback.
+
 - **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
   Run with nothing picked it printed an instruction and ended; with two
   edges that would not take a tangent blend it raised. Both looked like
@@ -55,7 +62,6 @@
   of a mesh, a face — is named as the reason before it asks for more.
 
 
-### Fixed
 
 - **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
   Run with nothing picked it printed an instruction and ended; with two
@@ -79,6 +85,7 @@
   and nothing picked. Meta now counts as Ctrl for sub-object picks and
   for holding control points, and the fabricated right click carries the
   pick when Shift is down. ⌘+Shift works as it always did.
+
 
 ## 0.9.1 — 2026-09-08
 
