@@ -3894,8 +3894,25 @@ class Viewport(QOpenGLWidget):
     def _log_input(self, ev, what: str):
         from ..utils import debuglog
         if debuglog.current() is not None:
+            state = []
+            if self.point_mode:
+                state.append("point-mode")
+            if self.space != "model":
+                state.append(self.space)
+            if self._cv_drag is not None:
+                state.append("cv-drag")
+            if getattr(self.gumball, "drag", None) is not None:
+                state.append("gumball-drag")
             debuglog.note("in", f"{describe_input(ev, what)}  "
-                                f"[{getattr(self, '_view_name', '?')}]")
+                                f"[{getattr(self, '_view_name', '?')}]"
+                                + (("  " + " ".join(state)) if state else ""))
+
+    def _log_pick(self, what: str):
+        """What a left click came to, for the run log: an object, a
+        control point, a gumball handle, or nothing."""
+        from ..utils import debuglog
+        if debuglog.current() is not None:
+            debuglog.note("pick", what)
 
     def mousePressEvent(self, ev):
         # Whatever this click turns out to mean, it means it in the view you
@@ -3976,9 +3993,11 @@ class Viewport(QOpenGLWidget):
             cv = self._cv_hit(pos.x(), pos.y())
             if cv is None:
                 if self._take_gumball(pos, ev):
+                    self._log_pick("gumball handle")
                     return
             else:
                 obj_id, index, world = cv
+                self._log_pick(f"control point {index} of {obj_id}")
                 held = self._pick_control_point(obj_id, index, ev.modifiers())
                 self.update()
                 if not held:               # shift-clicked it off again
@@ -4404,6 +4423,7 @@ class Viewport(QOpenGLWidget):
         is the same objects being picked through the same kind of projection.
         """
         if self._box_active and self._press_pos is not None:
+            self._log_pick("a selection band")
             x0, y0 = self._press_pos.x(), self._press_pos.y()
             x1, y1 = self._box_end.x(), self._box_end.y()
             crossing = x1 < x0            # drag right-to-left = crossing
@@ -4419,6 +4439,7 @@ class Viewport(QOpenGLWidget):
             pos = ev.position()
             self._press_pos = None
             if self.point_mode:
+                self._log_pick("a point for the running command")
                 return
             mods = ev.modifiers()
             if (mods & Qt.KeyboardModifier.ControlModifier
@@ -4429,6 +4450,7 @@ class Viewport(QOpenGLWidget):
                     self.update()
                 return
             picked = self.pick_object(pos.x(), pos.y())
+            self._log_pick(f"object {picked}" if picked else "nothing")
             if picked:
                 self.objectClicked.emit(picked, ev.modifiers())
             else:
