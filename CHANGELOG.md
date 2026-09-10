@@ -76,6 +76,13 @@
 
 ### Added
 
+- **A rolling run log.** Every launch writes a log of itself — machine
+  and driver, files opened, every command-line echo, what was selected
+  when, mouse buttons and keys in the viewport, Qt warnings and Python
+  tracebacks — to `logs/` beside a source checkout or the user data
+  directory; `latest.log` points at the newest and the last ten are
+  kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
+  now comes with the traceback that did it.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
