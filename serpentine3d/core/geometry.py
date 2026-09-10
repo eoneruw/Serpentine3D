@@ -4416,6 +4416,10 @@ def _merge_exact(ba, bb):
     from OCP.TColGeom import TColGeom_Array2OfBezierSurface
     if ba.NbVPoles() != bb.NbVPoles():
         raise GeometryError("not compatible")
+    if any(b.IsURational() or b.IsVRational() for b in (ba, bb)):
+        # the Bezier assembly cannot carry weights (a Weight edit makes
+        # a surface rational); such a pair is fitted instead
+        raise GeometryError("not compatible")
     ra = np.asarray(_corner_rows(ba, "u1"), float)
     rb = np.asarray(_corner_rows(bb, "u0"), float)
     size = max(float(np.ptp(np.vstack([ra, rb]), axis=0).max()), 1.0)
@@ -4593,7 +4597,9 @@ def merge_surfaces(shape_a, shape_b, smooth: bool = True) -> tuple:
     try:
         _make_compatible_v(ba, bb)
         out = _merge_exact(ba, bb)
-    except GeometryError:
+    except Exception:                                    # noqa: BLE001
+        # not the same surface in two pieces (or the kernel would not
+        # have it): fit one through both instead
         exact = False
         out = _merge_by_fit(fa, fb, ba, bb, tolerance=size * 1e-4)
     if smooth and exact:
