@@ -1314,7 +1314,7 @@ class Gumball:
             return
         moved = set(d["originals"]) | set((d.get("made") or {}).values())
         if moved and tessellate.preview_is_coarser():
-            self.vp.scene.drop_meshes(moved)
+            self.vp.recut_in_background(moved)
 
     def drag_to(self, px, py, modifiers) -> str:
         d = self.drag

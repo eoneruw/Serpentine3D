@@ -1012,6 +1012,10 @@ def cmd_meshquality(ctx):
         panel = getattr(win, "display_panel", None)
         if panel is not None:
             panel.refresh()
-    ctx.scene.drop_meshes()
+    vp = ctx.viewport
+    if vp is not None and hasattr(vp, "recut_in_background"):
+        vp.recut_in_background()        # the old meshes stay up meanwhile
+    else:
+        ctx.scene.drop_meshes()
     _redraw_all(ctx)
     ctx.echo(f"Mesh quality {pick}.")

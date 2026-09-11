@@ -39,6 +39,21 @@ def _triangles(shape):
     return len(tessellate.tessellate(shape).triangles)
 
 
+def _wait_for_recut(obj, before: int, seconds: float = 10.0) -> int:
+    """The real cut after a drag or a quality change lands from a worker
+    (the old mesh stays up meanwhile): pump events until it has."""
+    import time
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    t0 = time.time()
+    while time.time() - t0 < seconds:
+        app.processEvents()
+        if obj.mesh_ready and len(obj.mesh.triangles) != before:
+            return len(obj.mesh.triangles)
+        time.sleep(0.02)
+    return len(obj.mesh.triangles) if obj.mesh_ready else -1
+
+
 # -- the setting itself --
 
 def test_normal_is_the_default():
@@ -120,7 +135,8 @@ def test_picking_fine_in_the_panel_recuts_and_remembers(win):
     before = len(obj.mesh.triangles)
     win.display_panel.set_mesh_quality("fine")
     assert tessellate.mesh_quality() == "fine"
-    assert len(obj.mesh.triangles) > before
+    assert obj.mesh_ready, "the old mesh stays up until the new one lands"
+    assert _wait_for_recut(win.scene.get(obj.id), before) > before
     assert win.cfg.get("display", "mesh_quality") == "fine"
 
 
@@ -238,8 +254,9 @@ def test_a_control_point_drag_cuts_coarsely_then_properly(_qapp):
     _mouse(vp, "release", x + 25, y + 25, Qt.MouseButton.NoButton)
     assert vp._cv_drag is None
     final = vp.scene.get(obj.id)
-    assert not final.mesh_ready, "release did not drop the preview mesh"
-    assert len(final.mesh.triangles) > normal * 2         # the real cut
+    assert final.mesh_ready, "the preview mesh stays up until the real one lands"
+    preview = len(final.mesh.triangles)
+    assert _wait_for_recut(final, preview) > normal * 2   # the real cut
 
 
 def test_a_gumball_drag_does_the_same(_qapp):
@@ -257,10 +274,11 @@ def test_a_gumball_drag_does_the_same(_qapp):
     assert tessellate._active_quality() == "normal"
     gb.apply_scalar(10.0)
     moved = vp.scene.get(obj.id)
-    assert moved.mesh_ready or True
+    coarse = len(moved.mesh.triangles)         # cut while the drag is on
     gb.end_drag()
     assert tessellate._active_quality() == "very fine"
-    assert not vp.scene.get(obj.id).mesh_ready, "the moved object keeps a preview mesh"
+    assert _wait_for_recut(vp.scene.get(obj.id), coarse) > coarse, \
+        "the moved object keeps its preview mesh"
 
 
 def test_a_command_ghost_is_cut_at_preview_quality(_qapp):
@@ -309,12 +327,13 @@ def test_escape_lets_go_of_a_dragged_point(_qapp):
     _mouse(vp, "press", x, y, Qt.MouseButton.LeftButton)
     _mouse(vp, "move", x + 25, y + 25, Qt.MouseButton.LeftButton)
     assert vp._cv_drag is not None
+    coarse = len(vp.scene.get(obj.id).mesh.triangles)   # the preview cut
     from PySide6.QtGui import QKeyEvent
     vp.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape,
                                Qt.KeyboardModifier.NoModifier))
     assert vp._cv_drag is None
     assert tessellate._active_quality() == "very fine"
-    assert not vp.scene.get(obj.id).mesh_ready
+    assert _wait_for_recut(vp.scene.get(obj.id), coarse) > coarse
 
 
 def test_changing_the_quality_does_not_dirty_the_document(win):
@@ -332,3 +351,28 @@ def test_a_box_is_not_recut_every_frame():
     tessellate.tessellate(box)
     assert not tessellate._meshed_finer_than(
         box, tessellate._deflection_for(box))
+
+
+def test_a_cut_that_lands_after_an_edit_is_refused():
+    """A worker's mesh is for the shape it was cut from; an edit in the
+    meantime makes it stale, and the scene will not take it."""
+    scene = Scene()
+    obj = scene.add(_bonnet(), name="bonnet")
+    old_shape = obj.shape
+    mesh = tessellate.tessellate(old_shape)
+    moved = geometry.move_surface_control_point(old_shape, 4, (50, 40, 30))
+    scene.replace_shape(obj.id, moved)
+    assert not scene.take_mesh(obj.id, old_shape, mesh)
+    assert scene.take_mesh(obj.id, moved, tessellate.tessellate(moved))
+
+
+def test_a_landed_cut_reaches_every_pane():
+    """Panes key their GPU copies on the scene's mesh epoch, so a mesh
+    that lands through one pane is seen by the others."""
+    scene = Scene()
+    obj = scene.add(_bonnet(), name="bonnet")
+    before = scene.mesh_epoch
+    scene.take_mesh(obj.id, obj.shape, tessellate.tessellate(obj.shape))
+    assert scene.mesh_epoch == before + 1
+    scene.drop_meshes([obj.id])
+    assert scene.mesh_epoch == before + 2
