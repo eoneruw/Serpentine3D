@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import functools
 import math
+import os
 
 import numpy as np
 
@@ -328,7 +329,6 @@ def environment_names() -> list[str]:
 def environment_label(name: str) -> str:
     if name in ENVIRONMENTS:
         return ENVIRONMENTS[name][0]
-    import os
     return os.path.basename(name)
 
 
@@ -382,12 +382,15 @@ def _read_rgbe(path: str) -> np.ndarray:
             for c in range(4):
                 x = 0
                 while x < width:
-                    n = int(body[i]); i += 1
+                    n = int(body[i])
+                    i += 1
                     if n > 128:
                         n -= 128
-                        out[y, x:x + n, c] = body[i]; i += 1
+                        out[y, x:x + n, c] = body[i]
+                        i += 1
                     else:
-                        out[y, x:x + n, c] = body[i:i + n]; i += n
+                        out[y, x:x + n, c] = body[i:i + n]
+                        i += n
                     x += n
         else:
             out[y] = body[i:i + width * 4].reshape(width, 4)
