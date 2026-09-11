@@ -871,9 +871,11 @@ def cmd_radius(ctx):
 
 @command("meshquality", mutates=False, space="any")
 def cmd_meshquality(ctx):
-    """How finely curved surfaces are cut into triangles for the screen:
+    """Set how finely curved surfaces are cut into triangles for the screen.
+
     Coarse, Normal, Fine or VeryFine. Fine and above are for Rendered —
-    a mirror-like reflection shows a coarse mesh's triangles as creases."""
+    a mirror-like reflection shows a coarse mesh's triangles as creases.
+    """
     from ..core import tessellate
     # the option words: the labels with their spaces closed up (VeryFine)
     labels = {k: "".join(w.capitalize() for w in v.split()) for k, v in
