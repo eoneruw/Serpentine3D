@@ -15,7 +15,10 @@ from PySide6.QtWidgets import (
 
 from ..core import geometry as g
 from ..core.layout import DetailView, PaperObject, TextNote, parse_scale
+from ..core.linetype import LINETYPES
 from ..core.text import TextShape
+from .camera import STANDARD_VIEWS
+from .layout_view import LINE_VISIBLE
 
 
 class CustomMaterialDialog(QDialog):
@@ -65,9 +68,7 @@ class CustomMaterialDialog(QDialog):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             return dlg.material()
         return None
-from ..core.linetype import LINETYPES
-from .layout_view import LINE_VISIBLE
-from .camera import STANDARD_VIEWS
+
 
 # the scales an architect draws at, smallest denominator first; anything else
 # is typed in and read by the same rules as the `detailscale` command
@@ -177,7 +178,7 @@ class PropertiesPanel(QWidget):
         self.material_combo.addItem("Custom…", "Custom")
         self.material_combo.setToolTip(
             "How the surface looks in Rendered and PBR display; "
-            "Custom opens the material command for numbers")
+            "Custom opens a dialog for the numbers")
         self.material_combo.currentIndexChanged.connect(self._change_material)
 
         self.kind_label = QLabel("—")
