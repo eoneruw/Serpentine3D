@@ -210,3 +210,25 @@ def test_each_environment_draws_and_the_rotation_moves_the_reflection(win):
     turned = frame()
     assert not np.allclose(turned, seen["warehouse"]), \
         "turning the environment moves the reflections"
+
+
+def test_a_chip_names_the_environment_it_says(win):
+    """The chip list put the current environment first but looked the
+    id up in the unshuffled list, so with Sunset current a click on
+    Studio set Well-lit studio."""
+    from serpentine3d.ui import ibl
+    win.scene.set_environment(name="sunset")
+    win.processor.run("environment")
+    win.processor.set_option("Environment", ibl.environment_label("studio"))
+    win.processor.provide_text("")
+    assert win.scene.environment["name"] == "studio"
+
+
+def test_changing_the_environment_is_an_edit():
+    from serpentine3d.core.scene import Scene
+    scene = Scene()
+    before = scene.revision
+    scene.set_environment(exposure=1.4)
+    assert scene.revision > before
+    scene.set_environment(exposure=1.4)         # the same again: nothing
+    assert scene.environment["exposure"] == 1.4

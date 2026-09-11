@@ -343,6 +343,17 @@ class Scene:
         self.notify("objects")
         return obj
 
+    def set_environment(self, **changes):
+        """Change the PBR environment (name, rotation, exposure,
+        background). It is saved with the file, so it is an edit: the
+        revision moves and every pane hears of it."""
+        env = dict(self.environment or DEFAULT_ENVIRONMENT)
+        env.update(changes)
+        if env == self.environment:
+            return
+        self.environment = env
+        self.notify("environment")
+
     def realise_layer(self, layer_id: str) -> int:
         """Convert everything still deferred on a layer. Returns how many.
 
