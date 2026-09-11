@@ -76,6 +76,54 @@
   points takes out the row or column they sit on, since a surface's
   points come in rows and one cannot go alone. Both say how far the
   surface moved. Delete used to answer "Not a curve" and do nothing.
+- **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
+  Run with nothing picked it printed an instruction and ended; with two
+  edges that would not take a tangent blend it raised. Both looked like
+  a command doing nothing. Now it prompts for the two edges when it has
+  to, puts the blend on screen at once, and stays open for a Bulge
+  (type a number: 1 is the even S-curve, less is tauter, more bellies
+  out — it ghosts as you type) and a Continuity (Tangent or Position);
+  Enter keeps it, Escape takes it away. Bulge is a chip you drag and
+  the blend follows as you go; Continuity flips on a click; Sections
+  is a chip too, and says how many rows of control points the blend
+  has along the edge (sections + 2) — fewer to pull on by hand, more
+  to hug a wavy edge. The blend is one B-spline surface: a cubic
+  Bezier across, exactly the sections, tangent to both surfaces to
+  within thousandths of a degree at the default twelve. A pick it cannot use — an edge
+  of a mesh, a face — is named as the reason before it asks for more.
+- **An Actions panel.** What you can do to what you have picked, as
+  buttons beside the Properties panel: curves, surfaces, solids, meshes,
+  pictures and point clouds each get their groups, a held edge, face or
+  control point gets its own, and a pair of kinds (a curve and a
+  surface, two surfaces, a solid and a surface) offers what takes both.
+  It refreshes once per burst of scene changes, and only when its
+  buttons would change, so a big scene does not beach-ball on a click.
+- **Select by type, and a selection filter.** Edit → Select by Type
+  picks every curve, surface, solid, mesh or point cloud; a filter bar
+  beside the object snaps says what a click may pick, so a scan
+  underneath a panel stops getting in the way.
+- **Rendered (PBR).** A physically based display mode beside the old
+  Rendered: materials lit by an environment, with reflections, a
+  clearcoat for paint (Carpaint and Chrome presets) and filmic tone
+  mapping. The Properties panel's Material row paints the whole
+  selection, and Custom opens a dialog for the numbers.
+- **Pictures.** Drop an image on a pane and it stands up as a picture
+  in that pane's plane; `pictureframe` places one by two corners. A
+  picture is an object of its own kind — moved, scaled and rotated like
+  any other, cropped by dragging its corners (F10 shows them), with an
+  opacity slider in Properties — and it is saved with the file.
+- **glTF and USD open.** .glb, .gltf, .usd, .usda, .usdc and .usdz files
+  open as meshes with their materials.
+- **Rows of control points on surfaces.** `insertknot` adds a row or a
+  column (Direction U, V or Both) where you point, ghosted before the
+  click; Insert Row, Insert Column, Remove Row and Remove Column are in
+  the Actions panel, and Insert, Remove and Rebuild in the Edit menu.
+- **Small things asked for.** Double-click a curve to add a control
+  point there; hold Alt and the object snaps stand down; the Mac delete
+  key deletes; Enter over the canvas finishes a curve as right-click
+  does; a dragged control point honours the snaps, and dragging one
+  held point drags all of them; mesh vertices are a Vertex snap of
+  their own, off unless asked.
 
 ### Changed
 
@@ -98,21 +146,6 @@
   layer across but not the colour or material, so a red car-paint
   panel gave grey offsets and blends. They go through the scene's
   add_from now, and the paint comes with them.
-- **BlendSrf asks for its edges, shows the blend, and takes a bulge.**
-  Run with nothing picked it printed an instruction and ended; with two
-  edges that would not take a tangent blend it raised. Both looked like
-  a command doing nothing. Now it prompts for the two edges when it has
-  to, puts the blend on screen at once, and stays open for a Bulge
-  (type a number: 1 is the even S-curve, less is tauter, more bellies
-  out — it ghosts as you type) and a Continuity (Tangent or Position);
-  Enter keeps it, Escape takes it away. Bulge is a chip you drag and
-  the blend follows as you go; Continuity flips on a click; Sections
-  is a chip too, and says how many rows of control points the blend
-  has along the edge (sections + 2) — fewer to pull on by hand, more
-  to hug a wavy edge. The blend is one B-spline surface: a cubic
-  Bezier across, exactly the sections, tangent to both surfaces to
-  within thousandths of a degree at the default twelve. A pick it cannot use — an edge
-  of a mesh, a face — is named as the reason before it asks for more.
 - **A held edge on a plain surface no longer turns the gumball into a
   fillet handle.** The handle asked OCCT to fillet a border edge — one
   face, nothing to round between — and OCCT raised from inside the
@@ -131,6 +164,15 @@
   and nothing picked. Meta now counts as Ctrl for sub-object picks and
   for holding control points, and the fabricated right click carries the
   pick when Shift is down. ⌘+Shift works as it always did.
+- **The analysis modes show the surface, not the mesh.** Surfaces
+  shade with their own normals rather than averaged triangle normals,
+  so zebra stripes no longer break at a sphere's seam; zebra stripes
+  keep a one-pixel edge at any zoom; curved faces mesh finely enough
+  for zebra, draft and curvature to read the surface.
+- **A selected object keeps its own colour**, a parallel view can pick
+  everything it draws, the curve being drawn no longer blinks out on
+  every click, opening or starting a drawing ends the command that was
+  running, and the object snaps survive a mesh in the scene.
 
 ## 0.9.1 — 2026-09-08
 

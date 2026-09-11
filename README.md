@@ -92,12 +92,12 @@ commits a value mid-command, or repeats the last command.
 | | Commands |
 |---|---|
 | **Curves** | `line` `polyline` `curve` (NURBS by control points) `interpcrv` (through the points) `circle` `arc` `ellipse` `rectangle` `helix` `textobject` `blendcrv` `project` `pull` `intersect` |
-| **Surfaces** | `extrude` `revolve` `loft` `sweep1` `sweep2` `planarsrf` `patch`/`networksrf` `offsetsrf` `extendsrf` (one surface, not a strip sewn on) `mergesrf` (two surfaces sharing an edge → one net of control points) `unrollsrf` |
+| **Surfaces** | `extrude` `revolve` `loft` `sweep1` `sweep2` `planarsrf` `patch`/`networksrf` `offsetsrf` `extendsrf` (one surface, not a strip sewn on) `mergesrf` (two surfaces sharing an edge → one net of control points) `blendsrf` (between two edges, with a bulge you drag) `unrollsrf` |
 | **Solids** | `box` `sphere` `cylinder` `cone` `torus` `filletedge` `chamferedge` (both pick edges directly; fillets chain and take `start,end` variable radii) `shell` `cap` `contour` `section` `booleansplit` `pushpull` |
 | **Deform** | `twist` `taper` `bend` `flow` (curve-to-curve) `extend` `matchcrv` |
 | **Booleans** | `booleanunion` `booleandifference` `booleanintersection` |
 | **Transform** | `move` `copy` `rotate` `scale` `scalenu` `mirror` `array` |
-| **Edit** | `join` `explode` `trim` `split` `offset` `fillet` `rebuild` `pointson`/`pointsoff` (control points, curves *and* surfaces) `dir`/`flip` (curve direction and surface normals) `delete` `hide` `show` `rename` `undo` `redo` |
+| **Edit** | `join` `explode` `trim` `split` `offset` `fillet` `rebuild` (curves and surfaces, a count each way) `pointson`/`pointsoff` (control points, curves *and* surfaces) `insertknot` (a point on a curve, a row or column on a surface) `removeknot` `weight` `changedegree` `dir`/`flip` (curve direction and surface normals) `delete` `hide` `show` `rename` `undo` `redo` |
 | **Select** | `selall` `selnone` `selcrv` `selsrf` `selsolid` `sellayer` `selname` `sellast` `invert` `isolate` `unisolate` |
 | **Organise** | `group`/`ungroup` `lock`/`unlockall` `lockother` (lock all but the picked) `block` `insert` `blocklist` `count` `bringtofront`/`sendtoback` `bringforward`/`sendbackward` (draw order) |
 | **Camera** | `camera` (lens mm, cinema sensors, placement, 2.39/1.85 frame guides) `units` `cplane` |
