@@ -208,3 +208,18 @@ def test_a_stall_writes_every_threads_stack_into_the_log(runlog):
     assert "test_a_stall_writes_every_threads_stack" in text
     import faulthandler
     faulthandler.cancel_dump_traceback_later()
+
+
+def test_a_stall_the_app_came_back_from_is_stamped(tmp_path, monkeypatch):
+    """faulthandler's dump has no stamp and says nothing about whether
+    the app recovered; the next heartbeat says how long it was gone."""
+    monkeypatch.setenv("SERP3D_LOG_DIR", str(tmp_path))
+    log = debuglog.start()
+    try:
+        log.heartbeat()
+        log._last_beat -= log.STALL_SECONDS + 2.5      # as if 6.5 s passed
+        log.heartbeat()
+    finally:
+        debuglog.stop()
+    text = (tmp_path / "latest.log").read_text()
+    assert "stall" in text and "is back" in text
