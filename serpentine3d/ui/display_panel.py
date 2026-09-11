@@ -31,12 +31,7 @@ _MODES = [
 ]
 
 #: Mesh quality id to its label, coarsest first.
-_QUALITIES = [
-    ("coarse", "Coarse"),
-    ("normal", "Normal"),
-    ("fine", "Fine"),
-    ("very fine", "Very fine"),
-]
+_QUALITIES = list(tessellate.MESH_QUALITY_LABELS.items())
 
 
 class DisplayPanel(QWidget):

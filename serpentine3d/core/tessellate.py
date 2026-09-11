@@ -120,8 +120,6 @@ class DisplayMesh:
 # 0.15 (8.6 degrees) is about two and a half times the triangles on a
 # sphere and unnoticeable on a box; the linear deflection below still
 # decides most of the count on a big model.
-ANGULAR_DEFLECTION = 0.15
-
 # The display mesh quality: how fine a curved surface is cut into
 # triangles for the screen. (linear deflection as a fraction of the
 # object's size, angular deflection in radians.) Normal is what every
@@ -136,6 +134,14 @@ MESH_QUALITIES = {
     "fine": (0.0008, 0.06),
     "very fine": (0.0004, 0.03),
 }
+#: The label each quality is shown under — the one place for them.
+MESH_QUALITY_LABELS = {
+    "coarse": "Coarse",
+    "normal": "Normal",
+    "fine": "Fine",
+    "very fine": "Very fine",
+}
+ANGULAR_DEFLECTION = MESH_QUALITIES["normal"][1]      # what STL export scales
 _QUALITY = "normal"
 
 
@@ -176,10 +182,6 @@ def end_preview():
     _PREVIEW = False
 
 
-def previewing() -> bool:
-    return _PREVIEW
-
-
 def preview_is_coarser() -> bool:
     """Whether a preview cut is any different from the real one — when it
     is not, a drag's meshes are as good as final and can be kept."""
@@ -200,12 +202,19 @@ def _deflection_for(shape, preview: bool = False) -> float:
 
 def _meshed_finer_than(shape, deflection: float) -> bool:
     """Whether the shape already carries a triangulation cut well finer
-    (under half the deflection) than what is being asked for."""
+    (under half the deflection) than what is being asked for.
+
+    The mesher stores the deviation it achieved, which is 0 on a planar
+    face whatever was asked, so those say nothing; the coarsest of the
+    curved faces is what was asked for last time."""
+    worst = 0.0
     exp = TopExp_Explorer(shape, occ.FACE)
-    if not exp.More():
-        return False
-    tri = occ.triangulation(occ.to_face(exp.Current()), TopLoc_Location())
-    return tri is not None and tri.Deflection() < deflection * 0.5
+    while exp.More():
+        tri = occ.triangulation(occ.to_face(exp.Current()), TopLoc_Location())
+        exp.Next()
+        if tri is not None:
+            worst = max(worst, float(tri.Deflection()))
+    return worst > 0.0 and worst < deflection * 0.5
 
 
 def default_deflection(shape) -> float:
