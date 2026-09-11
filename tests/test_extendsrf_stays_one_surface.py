@@ -80,3 +80,38 @@ def test_a_rational_surface_still_gets_the_strip():
     heavy = BRepBuilderAPI_MakeFace(bs, 1e-6).Face()
     out = g.extend_surface(heavy, 1, 30.0)
     assert len(g.faces_of(out)) == 2        # sewn, as before
+
+
+def _multispan():
+    """A surface with interior knots both ways — the sort a few
+    inserted rows leave behind."""
+    s = _bonnet()
+    s = g.insert_surface_knot(s, (30.0, 40.0, 8.0), "both")
+    return g.insert_surface_knot(s, (70.0, 40.0, 10.0), "both")
+
+
+def test_the_original_knots_keep_their_multiplicity():
+    """Putting Bezier patches back together leaves every interior knot
+    at full multiplicity, which is a crease waiting to happen at each
+    of the original's own rows; they go back to what they were."""
+    s = _multispan()
+    bs, _ = g._face_bspline_surface(s)
+    u_before = [bs.UMultiplicity(i) for i in range(2, bs.NbUKnots())]
+    v_before = [bs.VMultiplicity(i) for i in range(2, bs.NbVKnots())]
+    out = g.extend_surface(s, 1, 30.0)
+    bo, _ = g._face_bspline_surface(out)
+    u_after = [bo.UMultiplicity(i) for i in range(2, bo.NbUKnots())]
+    v_after = [bo.VMultiplicity(i) for i in range(2, bo.NbVKnots())]
+    # one direction gained the seam (a single knot, which is the smooth
+    # join) and kept its own multiplicities; the other is untouched
+    if len(u_after) > len(u_before):
+        grown, kept = (u_before, u_after), (v_before, v_after)
+    else:
+        grown, kept = (v_before, v_after), (u_before, u_after)
+    assert kept[1] == kept[0]
+    assert sorted(grown[1]) == sorted(grown[0] + [1])
+    pts_before = g.surface_control_points(s)[1]
+    pts_after = g.surface_control_points(out)[1]
+    assert pts_after[0] * pts_after[1] == (
+        pts_before[0] * pts_before[1] + max(pts_before))   # one new row
+    assert g.surface_deviation(s, out) < 1e-9
