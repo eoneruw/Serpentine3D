@@ -21,7 +21,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 
 | Command | Does |
 |---|---|
-| `turntable` | Orbit the camera once around the work and write a video clip; |
+| `turntable` | Orbit the camera once around the work and write a video clip; orbits the selection if there is one, at the pane's own elevation. |
 | `turntableui` | Record a portrait turntable of the current shot and application UI. |
 
 ## Curves
@@ -47,7 +47,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 |---|---|
 | `bend` | Bend |
 | `curvaturegraph` (`combs`) | Toggle curvature combs on selected curves. |
-| `draftanalysis` (`draft`) | Colour faces by draft angle relative to the pull direction (+Z): |
+| `draftanalysis` (`draft`) | Colour faces by draft angle relative to the pull direction (+Z): green = enough draft, blue = vertical-side risk, red = undercut. |
 | `extend` | Extend |
 | `flow` (`flowalongcrv`) | Flow |
 | `matchcrv` (`match`) | Matchcrv |
@@ -65,7 +65,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `area` | Area |
 | `back` | Back |
 | `bottom` | Bottom |
-| `clippingplane` (`clip`) | Place a rectangular clipping plane on the CPlane: geometry on its |
+| `clippingplane` (`clip`) | Place a rectangular clipping plane on the CPlane: geometry on its normal side is hidden in shaded viewports. |
 | `cplane` | Reposition the construction plane (drawing plane + grid). |
 | `curvature` | Curvature |
 | `curvatureanalysis` (`curvmap`) | Curvatureanalysis |
@@ -84,14 +84,14 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `length` (`len`) | Length |
 | `maxviewport` (`max`, `maximizeviewport`) | Give the pane you are in the whole window; again puts it back. |
 | `namedview` (`nv`) | Namedview |
-| `newviewport` (`newvp`, `splitview`) | Open an extra live viewport in a dockable panel — drag its title |
-| `ortho` | Toggle ortho: picked points lock to CPlane axes from the last |
-| `osnap` | Toggle one object-snap type (or All = the master switch) — |
+| `newviewport` (`newvp`, `splitview`) | Open an extra live viewport in a dockable panel — drag its title bar to rearrange or tear it off to float; a pane's own title menu picks what it shows, so a paper sheet can sit beside the model. |
+| `ortho` | Toggle ortho: picked points lock to CPlane axes from the last point (hold Shift for the momentary opposite). |
+| `osnap` | Toggle one object-snap type (or All = the master switch) — scriptable, e.g. |
 | `perspective` (`persp`) | Perspective |
 | `pictureframe` (`picture`) | Place a reference image in the model (trace over photos/plans). |
 | `pointsoff` (`pf`) | Pointsoff |
 | `pointson` (`po`) | Show control points for selected curves and surfaces (F10). |
-| `printcheck` (`printinfo`) | Check selected objects for 3D-print readiness: watertight, manifold, |
+| `printcheck` (`printinfo`) | Check selected objects for 3D-print readiness: watertight, manifold, degenerate facets, thin walls, overhangs and print size. |
 | `radius` | Radius of curvature of a curve at a picked point. |
 | `redoview` | Go forward again through the views `undoview` stepped back through. |
 | `rendered` (`render`) | Environment-lit display with materials and a ground shadow. |
@@ -99,8 +99,8 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `selclippingplane` | Select every clipping plane object. |
 | `shaded` (`sh`) | Shaded |
 | `snap` | Snap |
-| `spacemouse` (`3dmouse`) | SpaceMouse status, on/off toggle, and a live axis readout for |
-| `surfaceedges` (`showedges`) | Show or hide the outlines of faces. Curves and text are unaffected. |
+| `spacemouse` (`3dmouse`) | SpaceMouse status, on/off toggle, and a live axis readout for checking the motion mapping. |
+| `surfaceedges` (`showedges`) | Show or hide the outlines of faces. |
 | `technical` (`tech`) | Hidden-line technical display (parallel projection linework). |
 | `tolerance` | Show or set the document's absolute modelling tolerance. |
 | `top` | Top |
@@ -162,11 +162,11 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `insertknot` (`insertcontrolpoint`) | Add a control point to a curve without moving the curve. |
 | `join` (`j`) | Join |
 | `layer` | Layer |
-| `material` (`mat`) | Assign a look (metallic/roughness/opacity) for rendered display |
+| `material` (`mat`) | Assign a look (metallic/roughness/opacity) for rendered display and GLB/USD export. |
 | `offset` | Offset |
 | `plugins` | List loaded plugins and where they came from. |
 | `rebuild` | Rebuild |
-| `recordhistory` (`history`) | Toggle record history: loft/extrude/revolve outputs rebuild when |
+| `recordhistory` (`history`) | Toggle record history: loft/extrude/revolve outputs rebuild when their input curves are edited. |
 | `redo` | Redo |
 | `removecontrolpoint` | Delete the control points you are holding, as Delete does. |
 | `removeknot` | Take a knot out of a curve and say how far the curve moved. |
@@ -215,6 +215,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `lockother` | Lock everything except what you picked, as Rhino's LockOther does. |
 | `matchprops` (`matchproperties`) | Copy layer, colour and material from one object to others. |
 | `meshtobrep` | Convert mesh objects into exact BREP shells (slow for big meshes). |
+| `pointcloud` (`pc`) | Point clouds: `info` says what a scan holds; `subsample` keeps an even fraction of its points, which is the cheap way to make a scan the laptop can orbit. |
 | `purge` | Remove empty layers and unused block definitions. |
 | `sendbackward` (`sendbackwards`) | Nudge the selected objects one step towards the back. |
 | `sendtoback` (`sb`) | Draw the selected objects behind overlapping ones. |
@@ -235,6 +236,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `sellast` | Sellast |
 | `sellayer` | Sellayer |
 | `selname` | Select objects whose name contains the given text. |
+| `selpointcloud` (`selpc`, `selpointclouds`) | Selpointcloud |
 | `selprev` | Restore the previous selection. |
 | `selpt` (`selpoints`) | Selpt |
 | `selsolid` (`selsolids`) | Selsolid |
@@ -249,7 +251,7 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `cap` | Cap |
 | `chamferedge` (`che`) | Chamferedge |
 | `contour` | Contour |
-| `filletedge` (`fe`) | Fillet edges. Ctrl+Shift-click edges first to fillet only those; |
+| `filletedge` (`fe`) | Fillet edges. |
 | `intersect` (`int`) | Intersect |
 | `mergeallcoplanarfaces` (`mergeallfaces`) | Fuse coplanar neighbouring faces of each selected polysurface. |
 | `pushpull` (`pp`, `moveface`) | SketchUp-style push/pull on a planar face. |
@@ -305,14 +307,14 @@ F1 opens this list inside the app). Aliases in parentheses.
 | `copy` (`co`, `cp`) | Copy |
 | `mirror` (`mi`) | Mirror |
 | `move` (`m`) | Move |
-| `orient` (`o2`) | Remap objects from two reference points to two target points |
-| `orient3pt` (`o3`) | Remap objects from three reference points to three target points |
+| `orient` (`o2`) | Remap objects from two reference points to two target points (rotation + translation, Scale=Yes matches the point spacing). |
+| `orient3pt` (`o3`) | Remap objects from three reference points to three target points (full 3D reorientation). |
 | `projecttocplane` (`flatten`) | Flatten curves/surfaces/points onto the construction plane. |
-| `rotate` (`ro`) | Rotate around the CPlane normal: type an angle, or pick a |
-| `rotate3d` (`ro3`) | Rotate around an arbitrary axis picked as two points. |
-| `scale` (`sc`) | Scale about a base point: type a factor, or grab a reference |
-| `scale1d` | Stretch along one direction only: type a factor and it stretches |
-| `scale2d` | Scale in the CPlane only (thickness along the CPlane normal is |
-| `scalenu` | Scale by a different amount along each axis: type the three |
-| `setpt` (`setpoints`) | Force chosen coordinates of every control point to one value — |
+| `rotate` (`ro`) | Rotate around the CPlane normal: type an angle, or pick a reference direction and drag it to its new heading (live preview). |
+| `rotate3d` (`ro3`) | Rotate around an arbitrary axis picked as two points: type an angle, or point at a reference direction and swing it round to where it should end up (live preview). |
+| `scale` (`sc`) | Scale about a base point: type a factor, or grab a reference point and drag it to its new position (live preview). |
+| `scale1d` | Stretch along one direction only: type a factor and it stretches the way the cursor is pointing, or set the axis with a reference point and drag that to where it should end up. |
+| `scale2d` | Scale in the CPlane only (thickness along the CPlane normal is kept). |
+| `scalenu` | Scale by a different amount along each axis: type the three factors, or grab a reference point and drag it to where it should end up (live preview either way). |
+| `setpt` (`setpoints`) | Force chosen coordinates of every control point to one value — the classic way to flatten walls onto a level (Z) or line things up on an axis. |
 
