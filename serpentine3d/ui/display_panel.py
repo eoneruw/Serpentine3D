@@ -18,11 +18,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..core import tessellate
 from . import ibl
 
 #: The combo's last entry: pick an equirectangular image of your own.
 _CUSTOM = "__custom__"
-from ..core import tessellate
 
 #: Mode id to the label people read, in the order the View menu lists them.
 _MODES = [
