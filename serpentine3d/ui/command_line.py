@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..utils import debuglog
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import (
@@ -71,7 +72,6 @@ class CommandInput(QLineEdit):
                    Qt.Key.Key_Tab, Qt.Key.Key_Space):
             # the keys that answer a prompt, for the run log; what was
             # typed reaches it as the echo, so letters are not logged
-            from ..utils import debuglog
             debuglog.note("in", f"key {Qt.Key(key).name.removeprefix('Key_')}"
                                 "  [command line]")
         self.deleting = key in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete)

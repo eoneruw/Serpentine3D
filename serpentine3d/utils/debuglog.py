@@ -144,6 +144,14 @@ class RunLog:
         """
         if self.broken:
             return
+        now = time.monotonic()
+        last = getattr(self, "_last_beat", None)
+        self._last_beat = now
+        if last is not None and now - last > self.STALL_SECONDS:
+            # the dump above (unstamped, faulthandler's own) was a stall
+            # the app came back from; say so, and how long it was
+            self.note("stall", f"the main thread was busy for "
+                               f"{now - last:.1f}s and is back")
         try:
             import faulthandler
             faulthandler.cancel_dump_traceback_later()
