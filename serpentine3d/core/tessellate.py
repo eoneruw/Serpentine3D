@@ -245,7 +245,23 @@ def _cutter():
         if exe:
             ctx.set_executable(exe)
         _CUTTER = ProcessPoolExecutor(max_workers=1, mp_context=ctx)
+        import atexit
+        # shut it down while the interpreter is whole: an executor left
+        # to the garbage collector at exit complains from a torn-down
+        # module ('NoneType' object has no attribute 'util')
+        atexit.register(stop_cutter)
     return _CUTTER
+
+
+def stop_cutter():
+    """End the helper process, if one was started."""
+    global _CUTTER
+    if _CUTTER is not None:
+        try:
+            _CUTTER.shutdown(wait=False, cancel_futures=True)
+        except Exception:                                  # noqa: BLE001
+            pass
+        _CUTTER = None
 
 
 def cut_elsewhere(shape, quality: str | None = None):
