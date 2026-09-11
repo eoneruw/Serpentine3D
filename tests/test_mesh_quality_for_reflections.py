@@ -279,3 +279,56 @@ def test_a_command_ghost_is_cut_at_preview_quality(_qapp):
     vp = Viewport(scene, SelectionManager(scene))
     vp.set_ghost(shape)
     assert len(vp._ghost.triangles) == normal < fine
+
+
+def test_a_typed_gumball_value_ends_the_preview(_qapp):
+    """An un-dragged handle click stays armed so a value can be typed;
+    nothing moves meanwhile, and a result made then must be cut
+    properly, so the preview ends with the arming."""
+    tessellate.set_mesh_quality("very fine")
+    vp, obj = _pane_over(_bonnet())
+    vp.selection.set([obj.id])
+    gb = vp.gumball
+    anchor, axes = gb.anchor_and_axes()
+    from serpentine3d.ui.gumball import CONE1, SHAFT0
+    import numpy as np
+    at = anchor + axes[0] * (SHAFT0 + CONE1) / 2 * gb._size_world(anchor)
+    px, py = (float(v) for v in vp.camera.project(
+        np.asarray([at]), vp.width(), vp.height())[0][:2])
+    assert gb.begin_drag(("move", 0), px, py, Qt.KeyboardModifier.NoModifier)
+    gb.arm()
+    assert tessellate._active_quality() == "very fine"
+    gb.cancel_drag()
+    assert tessellate._active_quality() == "very fine"
+
+
+def test_escape_lets_go_of_a_dragged_point(_qapp):
+    tessellate.set_mesh_quality("very fine")
+    vp, obj = _pane_over(_bonnet())
+    x, y = _pixel_of_cv(vp, obj, 4)
+    _mouse(vp, "press", x, y, Qt.MouseButton.LeftButton)
+    _mouse(vp, "move", x + 25, y + 25, Qt.MouseButton.LeftButton)
+    assert vp._cv_drag is not None
+    from PySide6.QtGui import QKeyEvent
+    vp.keyPressEvent(QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape,
+                               Qt.KeyboardModifier.NoModifier))
+    assert vp._cv_drag is None
+    assert tessellate._active_quality() == "very fine"
+    assert not vp.scene.get(obj.id).mesh_ready
+
+
+def test_changing_the_quality_does_not_dirty_the_document(win):
+    win.scene.add(_bonnet(), name="bonnet")
+    win.mark_saved()
+    win.display_panel.set_mesh_quality("fine")
+    assert not win.dirty
+
+
+def test_a_box_is_not_recut_every_frame():
+    """A planar face stores a deviation of 0 whatever was asked, and
+    that read as "finer than wanted" — so a box was cleaned and cut
+    again on every call."""
+    box = geometry.make_box((0, 0, 0), 10, 10, 10)
+    tessellate.tessellate(box)
+    assert not tessellate._meshed_finer_than(
+        box, tessellate._deflection_for(box))

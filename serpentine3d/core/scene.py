@@ -353,7 +353,9 @@ class Scene:
                       if o is not None])
         for obj in objs:
             obj._mesh = None
-        self.notify("objects")
+        # no notify: the geometry is what it was, so this is not an edit
+        # (it must not make a saved file dirty) — the panes that asked
+        # repaint themselves
 
     def realise_layer(self, layer_id: str) -> int:
         """Convert everything still deferred on a layer. Returns how many.

@@ -4960,15 +4960,20 @@ class Viewport(QOpenGLWidget):
             self._release_gumball(ev)
             return
         if self._cv_drag is not None:
-            moved = {self._cv_drag[0]} | {oid for oid, _, _ in
-                                          (self._cv_drag_group or [])}
-            self._cv_drag = None
-            self._cv_drag_group = []
-            self._active_snap = None       # the marker goes with the drag
-            self._end_mesh_preview(moved)
-            self.update()
+            self._end_cv_drag()
             return
         self._finish_pick(ev)
+
+    def _end_cv_drag(self):
+        """Let go of a control point, on release or on Escape: the
+        preview meshing ends and what moved is cut properly."""
+        moved = {self._cv_drag[0]} | {oid for oid, _, _ in
+                                      (self._cv_drag_group or [])}
+        self._cv_drag = None
+        self._cv_drag_group = []
+        self._active_snap = None       # the marker goes with the drag
+        self._end_mesh_preview(moved)
+        self.update()
 
     def _end_mesh_preview(self, moved_ids):
         """A drag is over: mesh at the real quality again, and cut the
@@ -5560,6 +5565,9 @@ class Viewport(QOpenGLWidget):
             if self.gumball.drag is not None:
                 self.gumball.cancel_drag()
                 self.update()
+                return
+            if self._cv_drag is not None:
+                self._end_cv_drag()
                 return
             self.escapePressed.emit()
         else:

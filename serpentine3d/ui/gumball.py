@@ -1296,13 +1296,14 @@ class Gumball:
         }
         vp.selection.rebuilding = self.rebuilding_id()
         tessellate.begin_preview()          # cut coarsely while it moves
+        self.drag["preview"] = True
         return True
 
     def _end_mesh_preview(self, d):
         """The drag is over: mesh at the real quality again, and cut what
         it moved once more if the drag's cuts were coarser."""
         tessellate.end_preview()
-        if d is None:
+        if d is None or not d.get("preview"):
             return
         moved = set(d["originals"]) | set((d.get("made") or {}).values())
         if moved and tessellate.preview_is_coarser():
@@ -1561,6 +1562,10 @@ class Gumball:
         """Keep an un-dragged handle click alive so a value can be typed."""
         if self.drag is not None and self.drag["handle"][0] in _ONE_DOF:
             self.drag["armed"] = True
+            # nothing moves while a value is typed, and a result made
+            # meanwhile must not be cut coarsely
+            tessellate.end_preview()
+            self.drag["preview"] = False
 
     # What is being held is either whole objects or some of one object's
     # control points, and every handle has to do the same thing to both. A
