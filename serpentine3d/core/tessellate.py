@@ -223,6 +223,59 @@ def _meshed_finer_than(shape, deflection: float) -> bool:
     return worst > 0.0 and worst < deflection * 0.5
 
 
+# -- cutting in another process ----------------------------------------
+#
+# BRepMesh holds the GIL for the whole of a cut (OCP does not let go of
+# it), so a worker thread frees the event loop for none of it: a mesh
+# cut on a thread is a beach ball all the same. A helper process is the
+# only way the app keeps turning while a heavy surface is cut. One is
+# spawned on first use and kept: it pays the kernel's import once.
+
+_CUTTER = None
+
+
+def _cutter():
+    global _CUTTER
+    if _CUTTER is None:
+        import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor
+        from ..utils.spawn import spawn_executable
+        ctx = mp.get_context("spawn")
+        exe = spawn_executable()
+        if exe:
+            ctx.set_executable(exe)
+        _CUTTER = ProcessPoolExecutor(max_workers=1, mp_context=ctx)
+    return _CUTTER
+
+
+def cut_elsewhere(shape, quality: str | None = None):
+    """A future for the shape's display mesh, cut in the helper process
+    at `quality` (the current one when None) and with curvature if the
+    display wants it. The result is a DisplayMesh with a uid of this
+    process's own."""
+    from . import geometry
+    data = geometry.shape_to_bytes(shape)
+    future = _cutter().submit(_cut_job, data, quality or _QUALITY,
+                              _CURVATURE)
+    return future
+
+
+def _cut_job(data: bytes, quality: str, curvature: bool):
+    """Runs in the helper process."""
+    from . import geometry
+    set_mesh_quality(quality)
+    set_curvature_enabled(curvature)
+    return tessellate(geometry.shape_from_bytes(data))
+
+
+def landed(mesh):
+    """A mesh back from the helper, given a uid of this process's own —
+    the helper's count means nothing here."""
+    from dataclasses import replace
+    return replace(mesh, uid=next(_uids), _tri_index=None, _seg_index=None,
+                   _bounds=None)
+
+
 def default_deflection(shape) -> float:
     """The adaptive mesh deflection tessellate() uses when none is given —
     exposed so callers (e.g. STL export) can scale off it for quality presets."""

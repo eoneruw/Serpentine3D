@@ -27,9 +27,10 @@
   point or a gumball handle meshes at Normal whatever the setting — at Very
   fine a bonnet takes over a second a cut, and the drag stopped following
   the mouse — as does a command's ghost preview. The proper cut after a
-  drag, and after a quality change, happens on a worker with the old
-  mesh staying up until the new one lands, so a heavy surface never
-  beach-balls the app.
+  drag, and after a quality change, happens in a helper process (the
+  kernel holds the interpreter lock for a cut, so a thread would not
+  do) with the old mesh staying up until the new one lands, so a heavy
+  surface never beach-balls the app.
 
 - **Environments for the PBR mode.** One procedural studio lit
   everything; now the Display panel (mode Rendered (PBR)) and the

@@ -4985,20 +4985,20 @@ class Viewport(QOpenGLWidget):
 
     def recut_in_background(self, ids=None):
         """Cut these objects' meshes (all of them when None) again at the
-        current quality, on workers, keeping what is on screen until each
-        new one lands.
+        current quality, in the helper process, keeping what is on screen
+        until each new one lands.
 
         The cut after a drag, or after the quality changes, used to happen
         on the next paint, on the main thread: at Very fine a surface with
         a few rows of handles takes seconds, and one that has been folded
-        forty, and the app was a beach ball for all of it. Now the old
-        (preview) mesh stays up, the real one arrives, and a further edit
-        meanwhile makes the arriving one stale, which the scene refuses.
+        forty, and the app was a beach ball for all of it. A thread would
+        not do: the kernel holds the GIL for the whole of a cut. So the
+        helper process cuts, the old (preview) mesh stays up, the real one
+        arrives, and a further edit meanwhile makes the arriving one
+        stale, which the scene refuses.
         """
         from ..core.mesh import MeshShape
         from ..core.pointcloud import PointCloudShape
-        from ..core.scene import _tess_lock
-        from ..core.tessellate import tessellate as _tess
         objs = (list(self.scene.objects.values()) if ids is None
                 else [o for o in (self.scene.objects.get(i) for i in ids)
                       if o is not None])
@@ -5007,20 +5007,29 @@ class Viewport(QOpenGLWidget):
             if shape is None or isinstance(shape, (MeshShape,
                                                    PointCloudShape)):
                 continue            # not cut from a quality: nothing to do
+            try:
+                future = tessellate.cut_elsewhere(shape)
+            except Exception:                              # noqa: BLE001
+                continue            # no helper: the next paint cuts it
 
-            def work(oid=obj.id, shape=shape):
+            def done(fut, oid=obj.id, shape=shape):
                 try:
-                    with _tess_lock(shape):
-                        mesh = _tess(shape)
+                    mesh = fut.result()
                 except Exception:                          # noqa: BLE001
-                    return
+                    mesh = None         # no helper: the next paint cuts it
                 self._recutDone.emit((oid, shape, mesh))
 
-            self._worker_pool().submit(work)
+            future.add_done_callback(done)
 
     def _on_recut_done(self, payload):
         oid, shape, mesh = payload
-        if self.scene.take_mesh(oid, shape, mesh):
+        if mesh is None:
+            obj = self.scene.objects.get(oid)
+            if obj is not None and obj._shape is shape:
+                self.scene.drop_meshes([oid])      # cut here, on the paint
+                self.update()
+            return
+        if self.scene.take_mesh(oid, shape, tessellate.landed(mesh)):
             self.update()
 
     def _finish_swipe(self, ev) -> bool:
