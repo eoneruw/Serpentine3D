@@ -169,3 +169,31 @@ def test_the_command_takes_two_surfaces_and_leaves_one():
     assert len(g.faces_of(scene.get(a.id).shape)) == 1
     assert sel.ids == [a.id]
     assert any("Merged into one surface" in e for e in echoes), echoes
+
+
+def test_an_exact_merge_keeps_the_halves_own_knots_smooth():
+    a = _bonnet()
+    a = g.insert_surface_knot(a, (30.0, 40.0, 8.0), "both")
+    fa, fb = g.faces_of(g._extend_surface_sewn(a, 1, 30.0))
+    face, exact, _dev = g.merge_surfaces(fa, fb)
+    assert exact
+    bo, _ = g._face_bspline_surface(face)
+    p = bo.UDegree()
+    assert all(bo.UMultiplicity(i) < p for i in range(2, bo.NbUKnots()))
+    assert all(bo.VMultiplicity(i) < bo.VDegree()
+               for i in range(2, bo.NbVKnots()))
+    assert g.surface_deviation(a, face) < 0.5
+
+
+def test_a_shared_v_knot_is_not_doubled_up():
+    """Bringing two surfaces to the same V knots summed the
+    multiplicities of a knot both already had; it takes the larger."""
+    a = _bonnet()
+    a = g.insert_surface_knot(a, (50.0, 30.0, 10.0), "v")
+    b = g.insert_surface_knot(a, (50.0, 60.0, 10.0), "v")
+    ba, _ = g._face_bspline_surface(a)
+    bb, _ = g._face_bspline_surface(b)
+    g._make_compatible_v(ba, bb)
+    for bs in (ba, bb):
+        mults = [bs.VMultiplicity(i) for i in range(2, bs.NbVKnots())]
+        assert mults == [1, 1], mults

@@ -2,7 +2,7 @@
 
 from ..core import geometry as g
 from .base import (
-    NumberReq, OptionReq, PointReq, SelectReq, TextReq, command)
+    IntReq, NumberReq, OptionReq, PointReq, SelectReq, TextReq, command)
 
 
 def _delete_held_points(ctx) -> bool:
@@ -317,7 +317,6 @@ def cmd_rebuild(ctx):
     """
     objs = yield SelectReq("Select curves or surfaces to rebuild",
                            kinds=("curve", "surface"))
-    from .base import IntReq
     curves = [o for o in objs if o.kind == "curve"]
     surfaces = [o for o in objs if o.kind == "surface"]
     if curves:
@@ -353,6 +352,7 @@ def cmd_rebuild(ctx):
             done += 1
         if not done:
             ctx.echo("Nothing rebuilt.")
+    ctx.select_result([o for o in objs if ctx.scene.get(o.id) is not None])
 
 
 # --- knots ------------------------------------------------------------------
@@ -511,7 +511,6 @@ def cmd_changedegree(ctx):
     surface you mean to sculpt wants. Only upward: lowering a degree
     moves the shape, and `rebuild` is the honest way to do that.
     """
-    from .base import IntReq
     objs = yield SelectReq("Select curves or surfaces to raise the degree "
                            "of", kinds=("curve", "surface"))
     surfaces = [o for o in objs if o.kind == "surface"]
@@ -539,6 +538,7 @@ def cmd_changedegree(ctx):
             ctx.echo(f"{o.name}: {exc}")
     ctx.echo(f"Degree {degree} on {done} object(s)." if done
              else "Nothing changed.")
+    ctx.select_result(objs)          # still held: the next pull is on them
 
 
 @command("removeknot")

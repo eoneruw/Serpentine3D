@@ -412,9 +412,14 @@ def cmd_extendsrf(ctx):
     """Extend a surface past a Ctrl+Shift-picked boundary edge."""
     picked = _picked_face_edges(ctx)
     if not picked:
-        ctx.echo("Ctrl+Shift-click a surface boundary edge first, "
-                 "then run ExtendSrf.")
-        yield from ()
+        # no edge held: ask for one, the way BlendSrf does
+        yield SelectReq("Ctrl+Shift-click the surface edge to extend "
+                        "past, then Enter", min_count=0,
+                        allow_preselected=False)
+        picked = _picked_face_edges(ctx)
+    if not picked:
+        ctx.echo("ExtendSrf needs a surface edge picked (Ctrl+Shift-click "
+                 "one). Nothing extended.")
         return
     obj, _, _, idx = picked[0]
 
