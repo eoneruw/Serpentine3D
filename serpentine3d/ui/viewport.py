@@ -25,6 +25,7 @@ from ..utils import units as _units
 from ..utils.glsetup import set_default_gl_format  # noqa: F401
 from ..utils.math3d import (normalize, ray_line_parameter, ray_plane, ray_plane_any, ray_triangle_hits)
 from . import gpu_share, theme
+from .gumball import CTRL_KEYS as _CTRL_KEYS
 from .camera import (
     STANDARD_VIEWS,
     Camera,
@@ -78,9 +79,8 @@ EDGE_PICK_PX = 4.5        # a picked edge, wide enough to call feedback
 EDGE_PICK_HALO_PX = 7.0   # the dark rim under it
 
 
-#: Ctrl, as either key a Mac has for it (Qt calls the marked one Meta).
-CTRL_KEYS = (Qt.KeyboardModifier.ControlModifier
-             | Qt.KeyboardModifier.MetaModifier)
+#: Ctrl, as either key a Mac has for it — see gumball.CTRL_KEYS.
+CTRL_KEYS = _CTRL_KEYS
 
 
 def subobject_chord(modifiers) -> bool:
@@ -3912,7 +3912,7 @@ class Viewport(QOpenGLWidget):
                         return
                 # Ctrl stands an axis up from the CPlane rather than taking
                 # the point: this click says where, the height comes after.
-                if (ev.modifiers() & Qt.KeyboardModifier.ControlModifier
+                if (ev.modifiers() & CTRL_KEYS
                         and self.space == "model"
                         and self._locked_axis() is None
                         and self.lock_elevation(pos.x(), pos.y())):
@@ -3938,8 +3938,7 @@ class Viewport(QOpenGLWidget):
                     self._begin_hold(pos, ev.modifiers())
                     return
                 add = bool(ev.modifiers() & (
-                    Qt.KeyboardModifier.ShiftModifier
-                    | Qt.KeyboardModifier.ControlModifier))
+                    Qt.KeyboardModifier.ShiftModifier | CTRL_KEYS))
                 if self.layout_view.press(pos.x(), pos.y(), add=add):
                     self.layoutSelectionChanged.emit()
                     self.update()
@@ -4010,8 +4009,7 @@ class Viewport(QOpenGLWidget):
                 self._last_mouse = pos
                 return
             shift = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-            ctrl = bool(ev.modifiers()
-                        & Qt.KeyboardModifier.ControlModifier)
+            ctrl = bool(ev.modifiers() & CTRL_KEYS)
             action = drag_action(self.camera.projection, shift, ctrl)
             if action == "pan":
                 self.camera.pan(dx, dy, self.height())
@@ -4189,7 +4187,7 @@ class Viewport(QOpenGLWidget):
         mods = ev.modifiers()
         command = _cfg.chord_command(chords, _cfg.chord_key(
             button,
-            ctrl=bool(mods & Qt.KeyboardModifier.ControlModifier),
+            ctrl=bool(mods & CTRL_KEYS),
             shift=bool(mods & Qt.KeyboardModifier.ShiftModifier),
             alt=bool(mods & Qt.KeyboardModifier.AltModifier)))
         if not command:
@@ -4755,7 +4753,7 @@ class Viewport(QOpenGLWidget):
         mods = QApplication.queryKeyboardModifiers()
         if mods & Qt.KeyboardModifier.ShiftModifier:
             step *= 10.0
-        if mods & Qt.KeyboardModifier.ControlModifier:
+        if mods & CTRL_KEYS:
             step *= 0.1
         vec = (self.cplane.xdir * direction[0]
                + self.cplane.ydir * direction[1]

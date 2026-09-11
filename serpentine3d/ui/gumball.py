@@ -50,10 +50,17 @@ def _alt_held(modifiers) -> bool:
     return bool(int(m) & int(Qt.KeyboardModifier.AltModifier.value))
 
 
+#: Ctrl, as either key a Mac has for it (Qt calls the marked one Meta).
+#: Defined here, at the bottom of the import order, for the viewport
+#: and the window to share.
+CTRL_KEYS = (Qt.KeyboardModifier.ControlModifier
+             | Qt.KeyboardModifier.MetaModifier)
+
+
 def _ctrl_held(modifiers) -> bool:
     """Ctrl state, read the same way, for the arrow that extrudes."""
     m = getattr(modifiers, "value", modifiers)          # Qt flag -> int
-    return bool(int(m) & int(Qt.KeyboardModifier.ControlModifier.value))
+    return bool(int(m) & int(CTRL_KEYS.value))
 
 
 # The filled box on the shaft grows the thing; scale is the hollow box on the

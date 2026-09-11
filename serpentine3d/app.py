@@ -29,7 +29,7 @@ from .ui.dialogs import untether
 from .ui.display_panel import DisplayPanel
 from .ui.layers_panel import LayersPanel
 from .ui.properties import PropertiesPanel
-from .ui.viewport import Viewport, set_default_gl_format
+from .ui.viewport import CTRL_KEYS, Viewport, set_default_gl_format
 
 _UNLIMITED = 16777215        # Qt's QWIDGETSIZE_MAX: "no maximum"
 
@@ -1098,7 +1098,7 @@ class MainWindow(QMainWindow):
             self.processor.click_object(obj_id)
             return
         additive = bool(modifiers & (Qt.KeyboardModifier.ShiftModifier
-                                     | Qt.KeyboardModifier.ControlModifier))
+                                     | CTRL_KEYS))
         ids = self.scene.expand_group_ids([obj_id])
         if additive:
             if self.selection.is_selected(obj_id):
@@ -1115,7 +1115,7 @@ class MainWindow(QMainWindow):
         if isinstance(self.processor.request, SelectReq):
             return
         additive = bool(modifiers & (Qt.KeyboardModifier.ShiftModifier
-                                     | Qt.KeyboardModifier.ControlModifier))
+                                     | CTRL_KEYS))
         if not additive:
             self.selection.clear()
 
@@ -1124,7 +1124,7 @@ class MainWindow(QMainWindow):
             self.processor.box_objects(ids)
             return
         ids = self.scene.expand_group_ids(ids)
-        if modifiers & Qt.KeyboardModifier.ControlModifier:
+        if modifiers & CTRL_KEYS:
             remaining = [i for i in self.selection.ids if i not in ids]
             self.selection.set(remaining)
         elif modifiers & Qt.KeyboardModifier.ShiftModifier:
