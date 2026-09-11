@@ -286,7 +286,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `extrude` (`ext`, `extrudecrv`) | Extrude |
 | `helix` | Helix |
 | `loft` | Loft |
-| `mergesrf` (`mergesurfaces`) | Two surfaces that share an edge become one, with one net of |
+| `mergesrf` (`mergesurfaces`) | Merge two surfaces that share an edge into one, with one net of points. |
 | `offsetsrf` | Offsetsrf |
 | `patch` (`networksrf`) | Patch |
 | `pipe` | Pipe |
