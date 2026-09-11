@@ -773,18 +773,6 @@ def fillet_edges(shape, radius, edges: list | None = None,
     return unwrap_compound(mk.Shape())
 
 
-def edge_is_shared(shape, edge) -> bool:
-    """Does the edge sit between two faces of the shape? A fillet needs
-    two faces to round between; a surface's border has one."""
-    n = 0
-    for f in faces_of(shape):
-        if any(e.IsSame(edge) for e in edges_of(f)):
-            n += 1
-            if n >= 2:
-                return True
-    return False
-
-
 def face_normal(face) -> Point:
     """Outward normal of a (near-)planar face, respecting orientation."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
