@@ -34,6 +34,44 @@ class MeshShape:
     def IsNull(self) -> bool:          # TopoDS protocol compatibility
         return len(self.vertices) == 0
 
+    def pieces(self) -> list:
+        """The connected pieces of the mesh, each a mesh of its own —
+        one when it is all one piece. Triangles that share a vertex are
+        one piece; a scan of many parts saved as one mesh comes apart at
+        the gaps between them. Labels spread along the edges in numpy
+        passes, so a million triangles take a moment, not a minute."""
+        n = len(self.vertices)
+        tris = self.triangles
+        if n == 0 or len(tris) == 0:
+            return [self]
+        a = np.concatenate([tris[:, 0], tris[:, 1], tris[:, 2]])
+        b = np.concatenate([tris[:, 1], tris[:, 2], tris[:, 0]])
+        label = np.arange(n)
+        while True:
+            lo = np.minimum(label[a], label[b])
+            new = label.copy()
+            np.minimum.at(new, a, lo)
+            np.minimum.at(new, b, lo)
+            # a label's own label, so chains collapse quickly
+            new = new[new]
+            if np.array_equal(new, label):
+                break
+            label = new
+        labels = label[tris[:, 0]]
+        groups = np.unique(labels)
+        if len(groups) <= 1:
+            return [self]
+        out = []
+        for lab in groups:
+            tri = tris[labels == lab]
+            used = np.unique(tri)
+            remap = np.full(n, -1, np.int64)
+            remap[used] = np.arange(len(used))
+            normals = (None if self.normals is None
+                       else self.normals[used])
+            out.append(MeshShape(self.vertices[used], remap[tri], normals))
+        return out
+
     def bbox(self):
         if not len(self.vertices):
             return ((0, 0, 0), (0, 0, 0))

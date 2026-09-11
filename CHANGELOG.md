@@ -134,6 +134,10 @@
 
 ### Fixed
 
+- **Explode takes a mesh apart.** It raised (`'MeshShape' object has no
+  attribute 'ShapeType'`) and cancelled. A mesh comes apart into its
+  connected pieces now — a scan of many parts saved as one mesh
+  separates at the gaps between them; one piece stays one.
 - **InsertKnot's new row lands where you pointed.** The knot went in at
   the picked spot, but a knot at u is not a control point at u — a handle
   acts at the mean of the knots beside it — so on a curved surface the new
