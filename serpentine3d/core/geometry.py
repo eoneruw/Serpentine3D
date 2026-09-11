@@ -3767,9 +3767,6 @@ def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
         pb, tb = pb[::-1], [-t for t in tb[::-1]]
     ca = _cross_boundary_dirs(face_a, pa, ta, pb)
     cb = _cross_boundary_dirs(face_b, pb, tb, pa)
-    from OCP.Geom import Geom_BezierCurve
-    from OCP.TColgp import TColgp_Array1OfPnt
-    from OCP.gp import gp_Pnt
     # Where the two edges meet — a V of a gap, the surfaces touching at
     # one end — the sections there have no length. A run of those at
     # either end collapses to a single point the loft closes on, the
@@ -3888,6 +3885,6 @@ def blend_surfaces_somehow(face_a, edge_a, face_b, edge_b):
         return (loft([edge_a, edge_b], ruled=True),
                 "the edges would not take a blend, so this is a ruled "
                 "surface straight between them")
-    except GeometryError:
+    except GeometryError as exc:
         raise GeometryError("No surface will build between these two "
-                            "edges — try edges that face each other")
+                            "edges — try edges that face each other") from exc
