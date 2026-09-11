@@ -135,9 +135,18 @@ class DisplayPanel(QWidget):
             self._config.set("display", "mesh_quality", name)
         vp = self.viewport()
         panes = list(self._all_panes()) or ([vp] if vp is not None else [])
-        scenes = {id(p.scene): p.scene for p in panes if hasattr(p, "scene")}
-        for scene in scenes.values():
-            scene.drop_meshes()
+        # one pane cuts for the scene (the meshes are the objects'); the
+        # rest hear of each new mesh through the scene's mesh epoch
+        done = set()
+        for pane in panes:
+            scene = getattr(pane, "scene", None)
+            if scene is None or id(scene) in done:
+                continue
+            done.add(id(scene))
+            if hasattr(pane, "recut_in_background"):
+                pane.recut_in_background()
+            else:
+                scene.drop_meshes()
         for pane in panes:
             pane.update()
 

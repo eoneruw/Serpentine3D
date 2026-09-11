@@ -914,6 +914,7 @@ class Viewport(QOpenGLWidget):
     layoutSelectionChanged = Signal()       # sheet items picked or dropped
     detailEntered = Signal(object)           # stepped into a detail mid-command
     _tessDone = Signal()                    # a background mesh finished
+    _recutDone = Signal(object)             # (obj_id, shape, mesh) from a worker
 
     def __init__(self, scene, selection, config=None, parent=None):
         super().__init__(parent)
@@ -1030,6 +1031,8 @@ class Viewport(QOpenGLWidget):
         self._centre_cache: dict[str, np.ndarray] = {}
         self._tessDone.connect(self._on_tess_done,
                                Qt.ConnectionType.QueuedConnection)
+        self._recutDone.connect(self._on_recut_done,
+                                Qt.ConnectionType.QueuedConnection)
         self._preview: _LineBatch | None = None
         self._preview_data = np.zeros((0, 3), np.float32)
         self._ghost = None                     # DisplayMesh of pending result
@@ -1872,6 +1875,7 @@ class Viewport(QOpenGLWidget):
         """Everything the reconcile below reads, so it can be skipped when
         none of it has moved. See `_sync_gpu`."""
         return (self.scene.revision, self._tess_epoch,
+                getattr(self.scene, "mesh_epoch", 0),
                 self._layer_linetypes(), self._visible_layers())
 
     def _sync_gpu(self):
@@ -4247,7 +4251,47 @@ class Viewport(QOpenGLWidget):
         objects it moved once more if the drag's cut was coarser."""
         tessellate.end_preview()
         if moved_ids and tessellate.preview_is_coarser():
-            self.scene.drop_meshes(moved_ids)
+            self.recut_in_background(moved_ids)
+
+    def recut_in_background(self, ids=None):
+        """Cut these objects' meshes (all of them when None) again at the
+        current quality, on workers, keeping what is on screen until each
+        new one lands.
+
+        The cut after a drag, or after the quality changes, used to happen
+        on the next paint, on the main thread: at Very fine a surface with
+        a few rows of handles takes seconds, and one that has been folded
+        forty, and the app was a beach ball for all of it. Now the old
+        (preview) mesh stays up, the real one arrives, and a further edit
+        meanwhile makes the arriving one stale, which the scene refuses.
+        """
+        from ..core.mesh import MeshShape
+        from ..core.pointcloud import PointCloudShape
+        from ..core.scene import _tess_lock
+        from ..core.tessellate import tessellate as _tess
+        objs = (list(self.scene.objects.values()) if ids is None
+                else [o for o in (self.scene.objects.get(i) for i in ids)
+                      if o is not None])
+        for obj in objs:
+            shape = obj._shape
+            if shape is None or isinstance(shape, (MeshShape,
+                                                   PointCloudShape)):
+                continue            # not cut from a quality: nothing to do
+
+            def work(oid=obj.id, shape=shape):
+                try:
+                    with _tess_lock(shape):
+                        mesh = _tess(shape)
+                except Exception:                          # noqa: BLE001
+                    return
+                self._recutDone.emit((oid, shape, mesh))
+
+            self._worker_pool().submit(work)
+
+    def _on_recut_done(self, payload):
+        oid, shape, mesh = payload
+        if self.scene.take_mesh(oid, shape, mesh):
+            self.update()
 
     def _finish_swipe(self, ev) -> bool:
         """Let go of an Alt swipe: turn to face the axis, or leave it be.

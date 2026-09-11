@@ -174,6 +174,9 @@ class Scene:
         self._batch_depth = 0           # see batched()
         self._batched_kinds: set[str] = set()
         self.revision = 0               # bumped on every change notification
+        # bumped when a display mesh changes without the geometry moving
+        # (a quality change, a worker's cut landing): panes read it
+        self.mesh_epoch = 0
         self.named_views: dict = {}     # name -> camera params
         # Objects showing their control points. Kept here rather than on a
         # viewport because points on is something the drawing is doing: turn
@@ -344,8 +347,20 @@ class Scene:
         for obj in objs:
             obj._mesh = None
         # no notify: the geometry is what it was, so this is not an edit
-        # (it must not make a saved file dirty) — the panes that asked
-        # repaint themselves
+        # (it must not make a saved file dirty); the mesh epoch is what
+        # tells every pane its GPU copy is stale
+        self.mesh_epoch += 1
+
+    def take_mesh(self, obj_id: str, shape, mesh) -> bool:
+        """A mesh cut on a worker lands: keep it if the object still has
+        the shape it was cut from (an edit meanwhile makes it stale).
+        Returns whether it was taken."""
+        obj = self.objects.get(obj_id)
+        if obj is None or obj._shape is not shape:
+            return False
+        obj._mesh = mesh
+        self.mesh_epoch += 1
+        return True
 
     def realise_layer(self, layer_id: str) -> int:
         """Convert everything still deferred on a layer. Returns how many.

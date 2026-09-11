@@ -128,11 +128,17 @@ class DisplayMesh:
 # big triangle the interpolation is only straight, so a smooth bonnet
 # shows the triangle edges as creases in the highlight. Coarse is for a
 # scan-heavy scene that has to stay quick.
+# Fine and Very fine were (0.0008, 0.06) and (0.0004, 0.03): a surface
+# with a few rows of handles took six seconds at Very fine and forty
+# when folded, on the main thread, and the app was a beach ball for all
+# of it. These are about a third of the triangles for the same look —
+# and the cut after a drag happens on a worker now (see
+# Viewport.recut_in_background), the preview mesh staying up meanwhile.
 MESH_QUALITIES = {
     "coarse": (0.004, 0.30),
     "normal": (0.002, 0.15),
-    "fine": (0.0008, 0.06),
-    "very fine": (0.0004, 0.03),
+    "fine": (0.001, 0.08),
+    "very fine": (0.0006, 0.05),
 }
 #: The label each quality is shown under — the one place for them.
 MESH_QUALITY_LABELS = {

@@ -13,8 +13,10 @@
   that they go. Coarse keeps a scan-heavy scene quick. Dragging a control
   point or a gumball handle meshes at Normal whatever the setting — at Very
   fine a bonnet takes over a second a cut, and the drag stopped following
-  the mouse — as does a command's ghost preview; what moved is cut
-  properly again on release, and a result once it is made.
+  the mouse — as does a command's ghost preview. The proper cut after a
+  drag, and after a quality change, happens on a worker with the old
+  mesh staying up until the new one lands, so a heavy surface never
+  beach-balls the app.
 
 ## 0.9.1 — 2026-09-08
 
