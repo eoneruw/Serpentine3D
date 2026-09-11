@@ -431,9 +431,11 @@ def cmd_rendered(ctx):
 
 @command("pbr", aliases=("pbrrender", "advancedrender"), mutates=False)
 def cmd_pbr(ctx):
-    """Physically based display: materials lit by a studio environment,
-    with reflections, a clearcoat for paint, and filmic tone mapping.
-    Lives beside 'rendered' so the two can be compared."""
+    """Physically based display: materials lit by an environment, with reflections.
+
+    A clearcoat for paint and filmic tone mapping. Lives beside
+    'rendered' so the two can be compared.
+    """
     _vp(ctx).set_display_mode("pbr")
     ctx.echo("PBR display. Assign looks with 'material' — try Carpaint.")
     yield from ()
