@@ -2276,7 +2276,7 @@ def _lift_degree_for_rows(bs, direction: str) -> list[str]:
     move — and it is what makes the new rows bend: a loft between two
     curves is degree 1 between them, and rows put into a degree-1
     surface are corners, however you drag them. Degree 2 bends already
-    and is left alone. Returns the directions lifted."""
+    and is left alone."""
     want = direction.lower()
     lifted = []
     u_deg = bs.UDegree()
@@ -2289,7 +2289,6 @@ def _lift_degree_for_rows(bs, direction: str) -> list[str]:
         lifted.append("V")
     if lifted:
         bs.IncreaseDegree(u_deg, v_deg)
-    return lifted
 
 
 def surface_degrees(shape) -> tuple[int, int]:
@@ -2445,18 +2444,6 @@ def insert_surface_knots_at_spans(shape) -> TopoDS_Shape:
     return mk.Face()
 
 
-def surface_iso_lines_at(shape, point, direction: str = "u") -> list:
-    """The isocurve(s) a knot row inserted at `point` would follow, as
-    polylines to ghost: for "u" the V isocurve through the point, for
-    "v" the U isocurve, for "both" the pair."""
-    out = []
-    if direction.lower() in ("u", "both"):
-        out.append(iso_curve(shape, point, along="v"))
-    if direction.lower() in ("v", "both"):
-        out.append(iso_curve(shape, point, along="u"))
-    return out
-
-
 def new_control_rows_at(shape, point, direction: str = "u") -> list:
     """The row(s) of control points insert_surface_knot would add through
     `point`, as polylines to ghost — the handles themselves, not the line
@@ -2570,20 +2557,20 @@ def delete_surface_control_rows(shape, flat_indices: list[int]):
     else:
         raise GeometryError("Hold points along one row or one column of "
                             "the surface — these run both ways")
-    from OCP.TColStd import TColStd_Array1OfReal
     if which == "u":
-        flat = TColStd_Array1OfReal(1, bs.NbUPoles() + bs.UDegree() + 1)
-        bs.UKnotSequence(flat)
-        deg = bs.UDegree()
+        deg, count = bs.UDegree(), nu
         targets = sorted(us, reverse=True)
     else:
-        flat = TColStd_Array1OfReal(1, bs.NbVPoles() + bs.VDegree() + 1)
-        bs.VKnotSequence(flat)
-        deg = bs.VDegree()
+        deg, count = bs.VDegree(), nv
         targets = sorted(vs, reverse=True)
-    seq = [flat.Value(k) for k in range(1, flat.Length() + 1)]
-    # highest index first: each removal renumbers the poles after it
+    if 0 in targets or count - 1 in targets:
+        raise GeometryError("The row on the edge of the surface cannot "
+                            "come off — it is the edge; take out the one "
+                            "beside it, or Trim")
+    # highest index first: each removal renumbers the poles after it,
+    # and reshapes the knots, so where each row acts is read afresh
     for idx in targets:
+        seq = _flat_knots(bs, which)
         _remove_surface_knot_at(bs, which, _greville(seq, deg, idx))
     mk = BRepBuilderAPI_MakeFace(bs, tol())
     if not mk.IsDone():
