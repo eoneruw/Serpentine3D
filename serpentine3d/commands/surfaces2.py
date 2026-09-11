@@ -475,8 +475,7 @@ def cmd_blendsrf(ctx):
 
 @command("mergesrf", aliases=("mergesurfaces",))
 def cmd_mergesrf(ctx):
-    """Two surfaces that share an edge become one, with one net of
-    control points.
+    """Merge two surfaces that share an edge into one, with one net of points.
 
     Rhino's MergeSrf. Pick two untrimmed surfaces with an edge in common
     — a panel and the blend against it, a surface and an extension sewn
