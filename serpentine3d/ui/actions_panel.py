@@ -98,8 +98,7 @@ SOLIDS = [
 ]
 
 MESHES = [
-    ("Mesh", [("meshtobrep", "To Surfaces"), ("smooth", "Smooth"),
-              ("explode", "Explode")]),
+    ("Mesh", [("meshtobrep", "To Surfaces"), ("explode", "Explode")]),
 ]
 
 POINTCLOUDS = [
@@ -120,6 +119,12 @@ EDGES = [
                       ("filletedge", "Fillet Edge"),
                       ("chamferedge", "Chamfer Edge")]),
 ]
+#: Picked edges count as curves for the surface-from-curves commands, so
+#: two of them (or an edge and a curve) offer what two curves do.
+BETWEEN_EDGES = ("Between the picked edges", [
+    ("loft", "Loft"), ("edgesrf", "Edge Surface"),
+    ("sweep2", "Sweep 2 (2 rails + profile)"),
+    ("planarsrf", "Planar Surface")])
 POINTS = [
     ("Held points", [("weight", "Weight"),
                      ("removecontrolpoint", "Remove Point")]),
@@ -187,16 +192,19 @@ COLUMNS = 2
 PANEL_MIN_WIDTH = 240        # two buttons of a long-ish label, side by side
 
 
-def groups_for(kinds, subkinds=(), counts=None) -> list:
+def groups_for(kinds, subkinds=(), counts=None, subcounts=None) -> list:
     """The groups the panel shows for a selection of these kinds.
 
     `kinds` are the kinds of the objects held, `subkinds` those of any
     Ctrl+Shift-picked edges or faces, and `counts` how many of each
-    object kind, so two curves offer a loft where one does not.
+    object kind (`subcounts` of each sub-object kind), so two curves —
+    or two picked edges, or an edge and a curve — offer a loft where
+    one does not.
     """
     kinds = set(kinds)
     subkinds = set(subkinds)
     counts = counts or {}
+    subcounts = subcounts or {}
     out: list = []
     seen = set()
 
@@ -208,6 +216,8 @@ def groups_for(kinds, subkinds=(), counts=None) -> list:
     if "edge" in subkinds:
         for title, items in EDGES:
             add(title, items)
+        if subcounts.get("edge", 0) + counts.get("curve", 0) >= 2:
+            add(*BETWEEN_EDGES)
     if "face" in subkinds:
         for title, items in FACES:
             add(title, items)
@@ -319,6 +329,12 @@ class ActionsPanel(QWidget):
             out[o.kind] = out.get(o.kind, 0) + 1
         return out
 
+    def subcounts(self) -> dict:
+        out: dict = {}
+        for (_, k, _) in getattr(self.selection, "subobjects", []):
+            out[k] = out.get(k, 0) + 1
+        return out
+
     def refresh_soon(self, *_):
         """Refresh once the current burst of changes is over."""
         self._refresh_timer.start()
@@ -332,7 +348,8 @@ class ActionsPanel(QWidget):
             want = ("groups", tuple(
                 (title, tuple(items))
                 for title, items in groups_for(self.kinds(), self.subkinds(),
-                                               self.counts())))
+                                               self.counts(),
+                                               self.subcounts())))
         if want == self._shown:
             return
         self._shown = want
