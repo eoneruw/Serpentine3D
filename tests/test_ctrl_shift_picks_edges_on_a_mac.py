@@ -110,3 +110,26 @@ def test_a_plain_right_click_is_still_enter(win):
     _click(win.viewport, QPointF(30.0, 30.0), Qt.MouseButton.RightButton,
            M.NoModifier)
     assert fired and not win.selection.subobjects
+
+
+def test_the_marked_control_key_works_for_every_ctrl_gesture():
+    """Ctrl+Shift picks were taught about the Mac's two keys; Ctrl-click
+    deselect, the Ctrl nudge and the drag chords still read only the
+    one Qt calls Control. One constant, everywhere."""
+    from PySide6.QtCore import Qt
+    from serpentine3d.ui import gumball, viewport
+    assert viewport.CTRL_KEYS is gumball.CTRL_KEYS
+    meta = Qt.KeyboardModifier.MetaModifier
+    assert gumball._ctrl_held(meta)
+    assert gumball._ctrl_held(Qt.KeyboardModifier.ControlModifier)
+    assert not gumball._ctrl_held(Qt.KeyboardModifier.ShiftModifier)
+
+
+def test_a_meta_click_takes_an_object_out_of_the_selection(win):
+    from PySide6.QtCore import Qt
+    from serpentine3d.core import geometry as g
+    a = win.scene.add(g.make_box((0, 0, 0), 10, 10, 10), name="A")
+    b = win.scene.add(g.make_box((20, 0, 0), 10, 10, 10), name="B")
+    win.selection.set([a.id, b.id])
+    win._on_object_clicked(b.id, Qt.KeyboardModifier.MetaModifier)
+    assert win.selection.ids == [a.id]
