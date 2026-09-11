@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Explode takes a mesh apart.** It raised (`'MeshShape' object has no
+  attribute 'ShapeType'`) and cancelled. A mesh comes apart into its
+  connected pieces now — a scan of many parts saved as one mesh
+  separates at the gaps between them; one piece stays one.
 - **Held faces and edges of a solid move together, as one change.** Found
   through the band: a band across a box holds its faces and the edges
   between them, and `move` on that, or on four rim edges, did something
