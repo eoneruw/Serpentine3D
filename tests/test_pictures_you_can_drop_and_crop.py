@@ -301,3 +301,29 @@ def test_drawing_a_picture_leaves_texture_unit_0_as_it_found_it(win, image):
         assert int(GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D)) == probe
     finally:
         vp.doneCurrent()
+
+
+def test_the_placed_picture_stays_selected(win, image):
+    """The command set the selection itself, and the processor let it
+    go on the way out; F10 then had nothing to show."""
+    win.processor.run("pictureframe")
+    win.processor.provide_text(str(image))
+    win.processor.provide_text("0,0,0")
+    win.processor.provide_text("40,30,0")
+    assert not win.processor.busy
+    assert len(win.selection.ids) == 1
+    assert win.scene.get(win.selection.ids[0]).kind == "picture"
+
+
+def test_an_opacity_drag_is_one_undo_step(win, image):
+    _drop(win.viewport, image)
+    o = win.scene.all()[0]
+    win.selection.set([o.id])
+    panel = win.properties
+    depth = len(win.history._undo)
+    panel.opacity_slider.sliderPressed.emit()
+    for v in (90, 70, 50):
+        panel.opacity_slider.setValue(v)
+    panel.opacity_slider.sliderReleased.emit()
+    assert len(win.history._undo) == depth + 1
+    assert win.scene.get(o.id).material["opacity"] == pytest.approx(0.5)
