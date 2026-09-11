@@ -2222,7 +2222,7 @@ class Viewport(QOpenGLWidget):
         self._gpu_synced = key
         live = set()
         live_meshes = set()
-        layer_types = key[2]
+        layer_types = key[3]           # after the scene's mesh epoch
         for obj in self._gpu_candidates():
             live.add(obj.id)
             gpu = self._gpu.get(obj.id)
