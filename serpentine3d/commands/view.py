@@ -439,6 +439,15 @@ def cmd_pbr(ctx):
     yield from ()
 
 
+def _set_environment(ctx, env: dict):
+    """The scene's environment, every pane repainted, the Display panel
+    told — the one road for the command and its chips."""
+    ctx.scene.set_environment(**env)
+    panel = getattr(ctx.window, "display_panel", None)
+    if panel is not None:
+        panel.refresh()
+
+
 @command("environment", aliases=("env", "skybox"), mutates=False)
 def cmd_environment(ctx):
     """The environment the PBR mode lights and reflects: Studio, Well-lit
@@ -452,26 +461,26 @@ def cmd_environment(ctx):
     scene = ctx.scene
     env = dict(getattr(scene, "environment", {}) or {})
     names = ibl.environment_names()
-    labels = [ibl.environment_label(n) for n in names]
+    by_label = {ibl.environment_label(n): n for n in names}
+    labels = list(by_label)
     current = str(env.get("name", names[0]))
     if current in names:
         # the chip starts at the environment in use: a list option shows
         # its first entry until it is cycled, so the current one goes first
-        labels = ([ibl.environment_label(current)]
-                  + [lb for lb in labels if lb != ibl.environment_label(current)])
+        first = ibl.environment_label(current)
+        labels = [first] + [lb for lb in labels if lb != first]
 
     def apply(name, value):
         if name == "Environment":
-            if value in labels:
-                env["name"] = names[labels.index(value)]
+            if value in by_label:
+                env["name"] = by_label[value]
         elif name == "Rotation":
             env["rotation"] = float(value)
         elif name == "Exposure":
             env["exposure"] = float(value)
         elif name == "Background":
             env["background"] = value == "Yes"
-        scene.environment = dict(env)
-        _redraw_all(ctx)
+        _set_environment(ctx, env)
 
     while True:
         p = yield PointReq("Environment: click or drag the chips, Image for "
@@ -491,8 +500,7 @@ def cmd_environment(ctx):
                                  "or .jpg")
             if path and path.strip():
                 env["name"] = path.strip()
-                scene.environment = dict(env)
-                _redraw_all(ctx)
+                _set_environment(ctx, env)
             continue
         break
     name = str(scene.environment.get("name", "studio"))

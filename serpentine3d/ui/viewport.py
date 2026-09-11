@@ -1251,8 +1251,8 @@ class Viewport(QOpenGLWidget):
         self._last_mouse = None
         self._mesh_prog = self._line_prog = self._bg_prog = 0
         self._pbr_prog = 0
-        self._env_tex = 0
         self._env_texes = {}
+        self._env_failed: set = set()     # environments that would not build
         self._sky_prog = 0
         self._thick_prog = 0
         self._point_prog = 0
@@ -1318,7 +1318,6 @@ class Viewport(QOpenGLWidget):
         self._mesh_prog = _compile(MESH_VERT, MESH_FRAG)
         self._pbr_prog = _compile(MESH_VERT, PBR_FRAG)
         self._sky_prog = _compile(SKY_VERT, SKY_FRAG)
-        self._env_tex = 0             # the map bound this frame, if any
         self._env_texes = {}          # environment name -> GL texture
         self._line_prog = _compile(LINE_VERT, LINE_FRAG)
         self._thick_prog = _compile(THICK_VERT, LINE_FRAG)
@@ -2764,7 +2763,11 @@ class Viewport(QOpenGLWidget):
         try:
             ladder, sh = ibl.lighting(name)
         except Exception as exc:                               # noqa: BLE001
-            print(f"serp3d: environment {name!r}: {exc}", file=sys.stderr)
+            # said once, not on every frame: the cache keeps no failure
+            if name not in self._env_failed:
+                self._env_failed.add(name)
+                print(f"serp3d: environment {name!r}: {exc} — the studio "
+                      "stands in", file=sys.stderr)
             if name == "studio":
                 raise
             return self._environment_texture("studio")
@@ -2814,7 +2817,6 @@ class Viewport(QOpenGLWidget):
         settings = self.environment_settings()
         got = self._environment_texture(str(settings.get("name", "studio")))
         tex, ladder, sh = got
-        self._env_tex = tex
         prog = self._pbr_prog
         self._use(prog)
         GL.glActiveTexture(GL.GL_TEXTURE0)

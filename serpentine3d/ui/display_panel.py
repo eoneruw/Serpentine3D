@@ -152,11 +152,7 @@ class DisplayPanel(QWidget):
         scene = self._scene()
         if scene is None:
             return
-        env = dict(getattr(scene, "environment", {}) or {})
-        env.update(changes)
-        scene.environment = env
-        for vp in self._all():
-            vp.update()
+        scene.set_environment(**changes)      # every pane hears of it
 
     def _env_picked(self, _index):
         if self._loading:
