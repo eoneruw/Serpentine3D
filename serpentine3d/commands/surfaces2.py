@@ -10,7 +10,7 @@ from .base import (
 
 @command("patch", aliases=("networksrf",))
 def cmd_patch(ctx):
-    curves = yield SelectReq("Select boundary curves", kinds=("curve",),
+    curves = yield SelectReq("Select boundary curves", kinds=("curve",), edges_as_curves=True,
                              min_count=2)
     srf = g.patch_surface([c.shape for c in curves])
     obj = ctx.scene.add(srf)
@@ -232,7 +232,7 @@ def cmd_pipe(ctx):
 @command("edgesrf", aliases=("srfedges",))
 def cmd_edgesrf(ctx):
     curves = yield SelectReq("Select 2, 3 or 4 connected curves",
-                             kinds=("curve",), min_count=2, max_count=4)
+                             kinds=("curve",), edges_as_curves=True, min_count=2, max_count=4)
     srf = g.edge_surface([c.shape for c in curves])
     obj = ctx.scene.add(srf)
     ctx.echo(f"Created {obj.name} from {len(curves)} edge curves.")

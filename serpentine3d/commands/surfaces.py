@@ -6,7 +6,8 @@ from .base import NumberReq, PointReq, SelectReq, command
 
 @command("extrude", aliases=("ext", "extrudecrv"))
 def cmd_extrude(ctx):
-    curves = yield SelectReq("Select curves to extrude", kinds=("curve",))
+    curves = yield SelectReq("Select curves to extrude", kinds=("curve",),
+                             edges_as_curves=True)
     closed = any(g.is_closed_curve(c.shape) for c in curves)
     direction = tuple(ctx.cplane.normal)
 
@@ -60,7 +61,7 @@ def cmd_extrude(ctx):
 
 @command("revolve", aliases=("rev",))
 def cmd_revolve(ctx):
-    curves = yield SelectReq("Select curve to revolve", kinds=("curve",),
+    curves = yield SelectReq("Select curve to revolve", kinds=("curve",), edges_as_curves=True,
                              max_count=1)
     p1 = yield PointReq("Start of revolve axis")
     p2 = yield PointReq("End of revolve axis", rubber_from=p1)
@@ -78,7 +79,7 @@ def cmd_revolve(ctx):
 @command("loft")
 def cmd_loft(ctx):
     curves = yield SelectReq("Select 2 or more profile curves in order",
-                             kinds=("curve",), min_count=2,
+                             kinds=("curve",), edges_as_curves=True, min_count=2,
                              choices={"Style": ["Normal", "Ruled"]})
     srf = g.loft([c.shape for c in curves],
                  ruled=(ctx.opt("Style", "Normal") == "Ruled"))
@@ -97,7 +98,7 @@ def cmd_planar(ctx):
     drawn as a box). A loop inside another on the same plane is a hole.
     """
     curves = yield SelectReq("Select planar curves that close into loops",
-                             kinds=("curve",))
+                             kinds=("curve",), edges_as_curves=True)
     faces = g.planar_faces_from_curves([c.shape for c in curves])
     made = [ctx.scene.add(f, layer_id=curves[0].layer_id) for f in faces]
     ctx.echo(f"Created {len(made)} planar surface(s).")
@@ -105,9 +106,11 @@ def cmd_planar(ctx):
 
 @command("sweep1", aliases=("sweep",))
 def cmd_sweep1(ctx):
-    rails = yield SelectReq("Select rail curve", kinds=("curve",), max_count=1)
+    rails = yield SelectReq("Select rail curve", kinds=("curve",),
+                            edges_as_curves=True, max_count=1)
     profiles = yield SelectReq("Select profile curve", kinds=("curve",),
-                               max_count=1, allow_preselected=False)
+                               edges_as_curves=True, max_count=1,
+                               allow_preselected=False)
     srf = g.sweep1(profiles[0].shape, rails[0].shape)
     obj = ctx.scene.add(srf)
     ctx.echo(f"Created {obj.name}.")
@@ -180,14 +183,41 @@ def cmd_shell(ctx):
     ctx.echo(f"Shelled {len(objs)} solid(s) with wall {thickness:g}.")
 
 
+def _profile_and_rails(objs):
+    """Of three curves, the profile is the one whose ends touch the other
+    two — the rails run side by side and meet nothing. Picked in order
+    (rail, rail, profile) when none does."""
+    import math
+    ends = []
+    for o in objs:
+        try:
+            ends.append(g.curve_endpoints(o.shape))
+        except g.GeometryError:
+            ends.append(None)
+    (lo, hi) = g.bbox(g.make_compound([o.shape for o in objs]))
+    near = max(math.dist(lo, hi), 1.0) * 0.02
+    for i, o in enumerate(objs):
+        if ends[i] is None:
+            continue
+        others = [e for j, e in enumerate(ends) if j != i and e is not None]
+        touches = [any(min(math.dist(p, q) for q in e) < near for e in others)
+                   for p in ends[i]]
+        if len(others) == 2 and all(touches):
+            rails = [x for j, x in enumerate(objs) if j != i]
+            return o, rails
+    return objs[2], [objs[0], objs[1]]
+
+
 @command("sweep2")
 def cmd_sweep2(ctx):
-    rail1 = yield SelectReq("Select first rail", kinds=("curve",),
-                            max_count=1)
-    rail2 = yield SelectReq("Select second rail", kinds=("curve",),
-                            max_count=1, allow_preselected=False)
-    profiles = yield SelectReq("Select profile curve", kinds=("curve",),
-                               max_count=1, allow_preselected=False)
+    """Sweep a profile along two rails. Pick the rails then the profile —
+    or hold two surface edges and a curve between them first, and it
+    works out which is which."""
+    picked = yield SelectReq("Select two rails and a profile (edges of "
+                             "surfaces count)", kinds=("curve",),
+                             edges_as_curves=True, min_count=3, max_count=3)
+    profile, rails = _profile_and_rails(picked)
+    rail1, rail2, profiles = [rails[0]], [rails[1]], [profile]
     srf = g.sweep2(profiles[0].shape, rail1[0].shape, rail2[0].shape)
     obj = ctx.scene.add(srf)
     ctx.echo(f"Created {obj.name}.")

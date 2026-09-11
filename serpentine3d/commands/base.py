@@ -178,10 +178,40 @@ class SelectReq(Req):
     max_count: int | None = None          # None = unlimited, finish with Enter
     kinds: tuple = ()                     # () = any; else e.g. ("curve",)
     allow_preselected: bool = True
+    # A Ctrl+Shift-picked surface edge counts as a curve: a loft, a
+    # sweep or an edge surface between the edges of two panels is what
+    # someone holding those edges means. Only for commands that read
+    # their curves and leave them be — an edge is not an object of its
+    # own to trim, join or rebuild.
+    edges_as_curves: bool = False
     choices: dict | None = None
     preview_fn: object = None
     on_option: object = None
 
+
+
+def held_edge_curves(ctx) -> list:
+    """The Ctrl+Shift-picked edges in the selection, each as a curve
+    object that is not in the scene: the owner's paint and layer, the
+    edge for a shape, an id the owner's with the edge number on it."""
+    from dataclasses import replace
+    out = []
+    for oid, kind, idx in list(getattr(ctx.selection, "subobjects", [])):
+        if kind != "edge":
+            continue
+        owner = ctx.scene.get(oid)
+        if owner is None:
+            continue
+        try:
+            edges = geometry.edges_of(owner.shape)
+        except geometry.GeometryError:
+            continue
+        if not (0 <= idx < len(edges)):
+            continue
+        out.append(replace(owner, id=f"{oid}#edge{idx}",
+                           name=f"{owner.name} edge {idx + 1}",
+                           _shape=edges[idx], kind="curve", _mesh=None))
+    return out
 
 
 def _kinds_phrase(kinds: tuple) -> str:
@@ -766,7 +796,11 @@ class CommandProcessor:
             return
         if isinstance(req, SelectReq):
             self._select_buffer = []
-            if (req.allow_preselected and self.ctx.selection.ids):
+            edge_curves = (held_edge_curves(self.ctx)
+                           if req.edges_as_curves and req.allow_preselected
+                           else [])
+            if req.allow_preselected and (self.ctx.selection.ids
+                                          or edge_curves):
                 held = self.ctx.selection.objects()
                 pre = [o.id for o in held
                        if not req.kinds or o.kind in req.kinds]
@@ -774,7 +808,7 @@ class CommandProcessor:
                 # the alternative is a command parked on a prompt while the
                 # highlight still says "these", and every click from then
                 # on reads as a dead viewport.
-                if not pre:
+                if not pre and not edge_curves:
                     self.ctx.echo(
                         f"None of the {len(held)} selected object(s) can "
                         f"be used here — needs: {_kinds_phrase(req.kinds)}.")
@@ -783,15 +817,19 @@ class CommandProcessor:
                     self.ctx.echo(
                         f"Skipped {len(held) - len(pre)} selected "
                         f"object(s) — needs: {_kinds_phrase(req.kinds)}.")
-                if req.max_count and len(pre) > req.max_count:
+                if req.max_count and len(pre) + len(edge_curves) > req.max_count:
                     self.ctx.echo(f"Using the first {req.max_count} of "
-                                  f"{len(pre)} selected.")
+                                  f"{len(pre) + len(edge_curves)} selected.")
+                    keep = max(0, req.max_count - len(pre))
                     pre = pre[:req.max_count]
-                if len(pre) >= req.min_count:
-                    # consume pre-selection immediately
+                    edge_curves = edge_curves[:keep]
+                if len(pre) + len(edge_curves) >= req.min_count:
+                    # consume pre-selection immediately — the picked
+                    # edges too, which is the whole point of holding them
                     self.ctx.selection.clear()
                     self._advance(
-                        [self.ctx.scene.objects[i] for i in pre])
+                        [self.ctx.scene.objects[i] for i in pre]
+                        + edge_curves)
                     return
                 # too few to consume: carry the usable part into the
                 # pending pick, so adding to it completes the answer
@@ -1053,16 +1091,21 @@ class CommandProcessor:
         req = self.request
         if not isinstance(req, SelectReq):
             return
-        if not self._select_buffer and req.min_count > 0:
+        edges_held = (req.edges_as_curves and any(
+            k == "edge" for (_, k, _) in self.ctx.selection.subobjects))
+        if not self._select_buffer and not edges_held and req.min_count > 0:
             self.cancel()                    # Enter on nothing: never mind
             return
-        if len(self._select_buffer) < req.min_count:
+        objs = [self.ctx.scene.objects[i] for i in self._select_buffer]
+        if req.edges_as_curves:
+            # edges picked while the prompt waited are curves for it
+            objs += held_edge_curves(self.ctx)
+        if len(objs) < req.min_count:
             self.ctx.echo(
                 f"Select at least {req.min_count} object(s) — "
-                f"{len(self._select_buffer)} selected.")
+                f"{len(objs)} selected.")
             self._notify()
             return
-        objs = [self.ctx.scene.objects[i] for i in self._select_buffer]
         # sub-objects picked while the request waited (control points go
         # around the request, straight into the selection) are part of
         # the answer: the command reads them after the yield returns
