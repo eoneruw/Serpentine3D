@@ -2629,6 +2629,12 @@ def curvature_at(shape, near_point: Point) -> dict:
     }
 
 
+def _is_brep(shape) -> bool:
+    """Whether this is an OCCT shape at all — a mesh or a point cloud is
+    a shape of our own, with no topology to walk."""
+    return hasattr(shape, "ShapeType")
+
+
 def explode(shape) -> list:
     """Decompose: wires -> edges, shells/solids -> faces, compounds -> parts.
 
@@ -2639,6 +2645,13 @@ def explode(shape) -> list:
     the two bars. A compound holding one thing has nothing to come apart
     at, so the thing itself is what gets exploded.
     """
+    from .mesh import MeshShape
+    if isinstance(shape, MeshShape):
+        # a mesh comes apart into its connected pieces — a scan of a car
+        # is one mesh of many parts, and each is wanted on its own
+        return shape.pieces()
+    if not _is_brep(shape):
+        return []
     if shape.ShapeType() == occ.COMPOUND:
         from .occ import TopoDS_Iterator
         out = []

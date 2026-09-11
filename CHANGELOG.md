@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Explode takes a mesh apart.** It raised (`'MeshShape' object has no
+  attribute 'ShapeType'`) and cancelled. A mesh comes apart into its
+  connected pieces now — a scan of many parts saved as one mesh
+  separates at the gaps between them; one piece stays one.
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed
