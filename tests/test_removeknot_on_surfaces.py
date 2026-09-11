@@ -114,3 +114,15 @@ def test_removeknot_takes_surfaces_with_a_direction(win):
     assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (7, 6)
     win.processor.provide_text("")
     assert not win.processor.busy
+
+
+def test_the_edge_row_is_refused_rather_than_a_neighbour_taken():
+    """A row on the edge acts at the boundary knot, and "the nearest
+    interior knot" to that is the row beside it — which came out under
+    the edge row's name."""
+    srf = _panel()
+    _pts, (nu, nv) = g.surface_control_points(srf)
+    with pytest.raises(g.GeometryError, match="edge"):
+        g.delete_surface_control_rows(srf, [0])            # first row
+    with pytest.raises(g.GeometryError, match="edge"):
+        g.delete_surface_control_rows(srf, [(nu - 1) * nv])  # last row
