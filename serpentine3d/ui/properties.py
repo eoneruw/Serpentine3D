@@ -8,8 +8,8 @@ import numpy as np
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QHBoxLayout, QPushButton,
-    QComboBox, QFormLayout, QLabel, QLineEdit, QVBoxLayout, QWidget,
+    QComboBox, QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
+    QSlider, QVBoxLayout, QWidget,
 )
 
 from ..core import geometry as g
@@ -43,7 +43,6 @@ class PropertiesPanel(QWidget):
         self.layer_combo = QComboBox()
         self.layer_combo.currentIndexChanged.connect(self._change_layer)
 
-        from PySide6.QtWidgets import QHBoxLayout, QPushButton
         self.color_btn = QPushButton()
         self.color_btn.setFixedSize(40, 22)
         self.color_btn.setToolTip("Object colour override")
@@ -86,11 +85,14 @@ class PropertiesPanel(QWidget):
         # a picture only: how see-through it is, and its crop. The crop
         # corners are control points (F10 shows them; drag to frame), so
         # the buttons here are the same switch and a way back to whole.
-        from PySide6.QtWidgets import QSlider
         self.opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self.opacity_slider.setRange(5, 100)
         self.opacity_slider.setToolTip("How see-through the picture is")
+        # one undo step per drag, not one per tick of it
+        self.opacity_slider.sliderPressed.connect(self._begin_opacity)
+        self.opacity_slider.sliderReleased.connect(self._end_opacity)
         self.opacity_slider.valueChanged.connect(self._change_opacity)
+        self._opacity_drag = False
         self.crop_btn = QPushButton("Crop corners")
         self.crop_btn.setCheckable(True)
         self.crop_btn.setToolTip("Show the corners of the shown window; "
@@ -381,13 +383,23 @@ class PropertiesPanel(QWidget):
         finally:
             self._updating = was
 
+    def _begin_opacity(self):
+        obj = self._selected()
+        if obj is not None and obj.kind == "picture":
+            self.history.checkpoint("picture opacity")
+            self._opacity_drag = True
+
+    def _end_opacity(self):
+        self._opacity_drag = False
+
     def _change_opacity(self, value: int):
         obj = self._selected()
         if self._updating or obj is None or obj.kind != "picture":
             return
         mat = dict(obj.material or {})
         mat["opacity"] = max(0.05, min(1.0, value / 100.0))
-        self.history.checkpoint("picture opacity")
+        if not self._opacity_drag:
+            self.history.checkpoint("picture opacity")   # a keyboard step
         self.scene.update(obj.id, material=mat)
 
     def _toggle_crop_handles(self, on: bool):

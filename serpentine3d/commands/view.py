@@ -807,7 +807,7 @@ def cmd_pictureframe(ctx):
         cp.to_world(u1, v1 + height, w1), origin))
     shape = PictureShape(path, origin, u_vec, v_vec, size_px=size)
     obj = ctx.scene.add(shape, name=shape.name_hint)
-    ctx.selection.set([obj.id])
+    ctx.select_result([obj])            # left held, so F10 is the next thing
     ctx.echo(f"Picture placed ({os.path.basename(path)}). F10 shows its "
              "crop corners; drag them to frame the part you want.")
 
