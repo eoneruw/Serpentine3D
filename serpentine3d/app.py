@@ -1161,11 +1161,14 @@ class MainWindow(QMainWindow):
         req = self.processor.request
         self.command_line.set_prompt(self.processor.prompt_text())
         chips = self.processor.option_chips()
+        scrubs = {n: self.processor.option_scrub(n) for n, _ in chips}
         self.command_line.set_options(
-            chips, {n: self.processor.option_scrub(n) for n, _ in chips
-                    if self.processor.option_scrub(n) is not None})
+            chips, {n: sc for n, sc in scrubs.items() if sc is not None})
+        # this runs on every notify — every pixel of a chip drag — and the
+        # model's size is only wanted when the prompt takes a number
         self.command_line.set_number_scrub(
-            self.processor.number_scrub(self._model_scale()))
+            self.processor.number_scrub(self._model_scale())
+            if self.processor.wants_number() else None)
         self.command_line.set_keywords(self.processor.keyword_chips())
         # every pane, because a ghost is set on every pane: clearing one of
         # them leaves a preview on the others that no command owns any more.

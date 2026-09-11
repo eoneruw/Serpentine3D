@@ -1091,6 +1091,16 @@ class CommandProcessor:
         return [(n, self.command_options.get(n, option_default(v)))
                 for n, v in req.choices.items()]
 
+    def wants_number(self) -> bool:
+        """Whether the current prompt takes a number at all — so a caller
+        can skip measuring the model for number_scrub's step when it
+        does not."""
+        req = self.request
+        return (isinstance(req, (IntReq, NumberReq))
+                or (isinstance(req, PointReq) and (
+                    req.number_from is not None or req.axis_lock is not None
+                    or req.allow_number)))
+
     def number_scrub(self, scale: float = 100.0):
         """The number the current prompt would take, as something to drag.
 
