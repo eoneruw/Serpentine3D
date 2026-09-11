@@ -32,9 +32,9 @@ def _sheet():
 
 def test_a_border_edge_is_not_shared_and_a_box_edge_is():
     sheet = _sheet()
-    assert not g.edge_is_shared(sheet, g.edges_of(sheet)[0])
+    assert len(g.edge_faces(sheet, 0)) < 2
     box = g.make_box((0, 0, 0), 10, 10, 10)
-    assert g.edge_is_shared(box, g.edges_of(box)[0])
+    assert len(g.edge_faces(box, 0)) == 2
 
 
 def test_filleting_a_border_edge_is_a_geometry_error_not_a_crash():
