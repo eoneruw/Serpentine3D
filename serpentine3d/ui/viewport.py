@@ -20,6 +20,7 @@ from ..core import linetype as _lt
 from ..core import spatial
 from ..core import tessellate
 from ..utils import config as _cfg
+from ..utils import debuglog
 from ..utils import units as _units
 # Lives in utils so the launcher can set it without importing this
 # module (and the kernel behind it); re-exported here for old callers.
@@ -1368,7 +1369,6 @@ class Viewport(QOpenGLWidget):
                 self._max_line_width = float(rng[1])
             GL.glLineWidth(1.0)
             GL.glGetError()
-            from ..utils import debuglog
             version = GL.glGetString(GL.GL_VERSION) or b"?"
             debuglog.note_once("gl", renderer.decode(errors="replace")
                                + "  GL " + version.decode(errors="replace"))
@@ -3660,7 +3660,6 @@ class Viewport(QOpenGLWidget):
     def set_display_mode(self, mode: str):
         if mode not in self.DISPLAY_MODES:
             raise ValueError(f"Unknown display mode '{mode}'")
-        from ..utils import debuglog
         debuglog.note("view", f"display mode {mode}")
         if mode == "curvature":
             from ..core import tessellate as _tess
@@ -4503,7 +4502,6 @@ class Viewport(QOpenGLWidget):
         self.update()
         return True
     def _log_input(self, ev, what: str):
-        from ..utils import debuglog
         if debuglog.current() is not None:
             state = []
             if self.point_mode:
@@ -4521,7 +4519,6 @@ class Viewport(QOpenGLWidget):
     def _log_pick(self, what: str):
         """What a left click came to, for the run log: an object, a
         control point, a gumball handle, or nothing."""
-        from ..utils import debuglog
         if debuglog.current() is not None:
             debuglog.note("pick", what)
 

@@ -1552,17 +1552,15 @@ class MainWindow(QMainWindow):
         _log.note("sel", ", ".join(parts) if parts else "nothing")
 
     def _open_log_folder(self):
-        from .utils import debuglog
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QDesktopServices
-        d = debuglog.log_dir()
+        d = _log.log_dir()
         os.makedirs(d, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(d))
 
     def _copy_log_path(self):
-        from .utils import debuglog
-        log = debuglog.current()
-        path = log.path if log is not None else debuglog.log_dir()
+        log = _log.current()
+        path = log.path if log is not None else _log.log_dir()
         QApplication.clipboard().setText(path)
         self.command_line.echo(f"Log path copied: {path}")
 
@@ -1646,6 +1644,7 @@ class MainWindow(QMainWindow):
                 return
             self._save_rhino_version = fileio.rhino_version_from_filter(
                 getattr(self, "_picked_filter", ""))
+        _log.note("file", f"save {path}")
         try:
             fileio.export_file(self.scene, path,
                                rhino_version=getattr(
@@ -1667,6 +1666,7 @@ class MainWindow(QMainWindow):
         path = self._pick_file(save=False, title="Import")
         if not path:
             return
+        _log.note("file", f"import {path}")
         try:
             self.history.checkpoint("import")
             n = self._import_showing_progress(path)
@@ -1694,6 +1694,7 @@ class MainWindow(QMainWindow):
             stl_quality = self._pick_stl_quality()
             if stl_quality is None:
                 return
+        _log.note("file", f"export {path}")
         try:
             ids = self.selection.ids or None
             note = fileio.export_file(
@@ -2649,8 +2650,7 @@ def run_app(app, splash=None):
         _offer_default_app(window)
     window.start_update_check()
     code = app.exec()
-    from .utils import debuglog
-    debuglog.stop()
+    _log.stop()
     return code
 
 
@@ -2665,8 +2665,7 @@ def main():
     if "--selftest" in sys.argv:
         raise SystemExit(_selftest())
     signal.signal(signal.SIGINT, signal.SIG_DFL)
-    from .utils import debuglog
-    debuglog.start()
+    _log.start()
     set_default_gl_format()
     app = QApplication(sys.argv)
     return run_app(app, splash=None)
