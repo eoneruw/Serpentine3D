@@ -2473,7 +2473,11 @@ def run_app(app, splash=None):
     if file_assoc.should_offer(window.cfg):
         _offer_default_app(window)
     window.start_update_check()
-    return app.exec()
+    try:
+        return app.exec()
+    finally:
+        from .core import tessellate
+        tessellate.stop_cutter()        # the mesh helper, while whole
 
 
 def main():
