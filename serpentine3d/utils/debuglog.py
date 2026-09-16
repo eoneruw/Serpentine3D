@@ -193,7 +193,15 @@ class RunLog:
             from PySide6.QtCore import qInstallMessageHandler
 
             def qt_message(mode, context, message):
-                # ours to log, and still the terminal's to show
+                # ours to log, and still the terminal's to show. A few
+                # are Qt talking to itself on every click — the Cocoa
+                # accessibility bridge asking an empty list for its
+                # second row — and go in once, so the log stays a log.
+                if any(chatter in message for chatter in QT_CHATTER):
+                    if message in _said:
+                        return
+                    _said.add(message)
+                    message += "  (said once; Qt repeats it)"
                 self.note("qt", message)
                 try:
                     sys.stderr.original.write(message + "\n")
@@ -288,6 +296,13 @@ def note(kind: str, text: str):
 
 
 _said: set = set()
+
+#: Qt messages that are noise, not news: logged once per run.
+QT_CHATTER = (
+    "out of bounds for table with 0 rows",     # Cocoa accessibility, macOS
+    "Populating font family aliases",
+    "does not support propagateSizeHints",
+)
 
 
 def note_once(kind: str, text: str):
