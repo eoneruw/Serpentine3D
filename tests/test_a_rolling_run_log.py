@@ -223,3 +223,23 @@ def test_a_stall_the_app_came_back_from_is_stamped(tmp_path, monkeypatch):
         debuglog.stop()
     text = (tmp_path / "latest.log").read_text()
     assert "stall" in text and "is back" in text
+
+
+def test_qt_chatter_is_logged_once(tmp_path, monkeypatch):
+    """The Cocoa accessibility bridge asks an empty list for its second
+    row on every click and Qt complains every time; the log took each
+    one as news. Once per run, marked as repeating."""
+    monkeypatch.setenv("SERP3D_LOG_DIR", str(tmp_path))
+    from PySide6.QtCore import qWarning
+    log = debuglog.start()
+    try:
+        for _ in range(3):
+            qWarning("Cell requested for row 1 is out of bounds for table "
+                     "with 0 rows! Resizing table model.")
+        qWarning("something new and different")
+    finally:
+        debuglog.stop()
+    text = (tmp_path / "latest.log").read_text()
+    assert text.count("out of bounds for table") == 1
+    assert "said once" in text
+    assert text.count("something new and different") == 1
