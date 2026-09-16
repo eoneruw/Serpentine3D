@@ -244,7 +244,8 @@ def _cutter():
         exe = spawn_executable()
         if exe:
             ctx.set_executable(exe)
-        _CUTTER = ProcessPoolExecutor(max_workers=1, mp_context=ctx)
+        _CUTTER = ProcessPoolExecutor(max_workers=1, mp_context=ctx,
+                                      initializer=_cutter_init)
         import atexit
         # shut it down while the interpreter is whole: an executor left
         # to the garbage collector at exit complains from a torn-down
@@ -253,12 +254,23 @@ def _cutter():
     return _CUTTER
 
 
+def _cutter_init():
+    """Runs in the helper as it starts. Ctrl-C in the terminal reaches
+    the helper too (same process group) and it died with a traceback
+    on the terminal; it leaves that to the app, which ends it properly
+    on the way out."""
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
 def stop_cutter():
-    """End the helper process, if one was started."""
+    """End the helper process, if one was started — waiting for it, so
+    its queues and semaphores are cleaned up rather than reported as
+    leaked at shutdown."""
     global _CUTTER
     if _CUTTER is not None:
         try:
-            _CUTTER.shutdown(wait=False, cancel_futures=True)
+            _CUTTER.shutdown(wait=True, cancel_futures=True)
         except Exception:                                  # noqa: BLE001
             pass
         _CUTTER = None
