@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Drop a file on the window to import it.** Any format Import reads —
+  `.step`, `.3dm`, `.obj`, `.fbx`, `.stl`, `.dxf`, `.svg`, `.ply` — can be
+  dragged from the Finder or Explorer onto Serpentine3D;
+  several at once import in order, each its own undo step. A dropped
+  `.serp` opens, as a document would. Only images could be dropped before
+  (they still land as pictures in the viewport).
+
 ## 0.9.1 — 2026-09-08
 
 ### Fixed

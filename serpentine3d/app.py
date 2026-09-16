@@ -65,6 +65,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(APP_TITLE)
         self.resize(1440, 900)
+        self.setAcceptDrops(True)       # a model file, to import it
 
         # core state
         self._pending_update = None
@@ -1496,8 +1497,12 @@ class MainWindow(QMainWindow):
 
     def _file_import(self):
         path = self._pick_file(save=False, title="Import")
-        if not path:
-            return
+        if path:
+            self._import_path(path)
+
+    def _import_path(self, path: str):
+        """Add a file's objects to the scene (shared by the Import dialog
+        and a drop on the window). One undo step whatever the format."""
         try:
             self.history.checkpoint("import")
             n = self._import_showing_progress(path)
@@ -1509,6 +1514,48 @@ class MainWindow(QMainWindow):
         except Exception as exc:                              # noqa: BLE001
             self.history.discard_checkpoint()
             QMessageBox.warning(self, "Import failed", str(exc))
+
+    # ----------------------------------------------------- dropping files
+
+    @staticmethod
+    def droppable_paths(mime) -> list[str]:
+        """The local files in a drag that Import could read, in the order
+        dropped. Anything else — a folder, a URL, an image, a .txt — is
+        left for whoever else wants it (the viewport takes images)."""
+        if not mime.hasUrls():
+            return []
+        return [u.toLocalFile() for u in mime.urls()
+                if u.isLocalFile() and os.path.isfile(u.toLocalFile())
+                and os.path.splitext(u.toLocalFile())[1].lower()
+                in fileio.IMPORT_EXTS]
+
+    def dragEnterEvent(self, ev):
+        if self.droppable_paths(ev.mimeData()):
+            ev.acceptProposedAction()
+        else:
+            ev.ignore()
+
+    def dragMoveEvent(self, ev):
+        self.dragEnterEvent(ev)
+
+    def dropEvent(self, ev):
+        paths = self.droppable_paths(ev.mimeData())
+        if not paths:
+            ev.ignore()
+            return
+        ev.acceptProposedAction()
+        self.drop_files(paths)
+
+    def drop_files(self, paths: list[str]):
+        """What a drop does: each file's objects join the scene, the way
+        File > Import does. A .serp is a document, not a part, so it
+        opens instead (Save then goes back to that file) — one undo step
+        brings back whatever was there before."""
+        for path in paths:
+            if path.lower().endswith(".serp"):
+                self._open_path(path)
+            else:
+                self._import_path(path)
 
     # STL export mesh-quality presets, shown in the export prompt.
     _STL_QUALITY = [("Draft — coarse, small file", "draft"),
