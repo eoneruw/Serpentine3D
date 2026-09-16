@@ -137,6 +137,11 @@
 
 ### Fixed
 
+- **To Surfaces (`meshtobrep`) no longer beach-balls on a scan.** It makes
+  a B-rep face per triangle, so a scanned panel of a few hundred thousand
+  triangles meant minutes of frozen UI for a solid nothing can edit. Above
+  5,000 triangles it now asks first; above 50,000 it refuses and says to
+  fit a surface to the scan instead.
 - **Explode takes a mesh apart.** It raised (`'MeshShape' object has no
   attribute 'ShapeType'`) and cancelled. A mesh comes apart into its
   connected pieces now — a scan of many parts saved as one mesh
