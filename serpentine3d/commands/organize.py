@@ -191,11 +191,43 @@ def cmd_pointcloud(ctx):
         ctx.echo(f"{o.name}: {thinned.count:,} points kept.")
 
 
+#: Above this many triangles To Surfaces asks first; above ten times
+#: that it refuses. A face per triangle is what it makes, and a scanned
+#: panel of a few hundred thousand of them is minutes of beach ball for
+#: a solid nothing can edit.
+MESHTOBREP_ASK = 5_000
+MESHTOBREP_REFUSE = 50_000
+
+
 @command("meshtobrep")
 def cmd_meshtobrep(ctx):
-    """Convert mesh objects into exact BREP shells (slow for big meshes)."""
+    """Convert mesh objects into exact BREP shells — a face per triangle.
+
+    For a modelled mesh of a few thousand triangles. For a scan it is the
+    wrong tool: a face per triangle is minutes of work for a solid nothing
+    can edit; a surface fitted to the scan (Drape) is what a scan wants.
+    """
     objs = yield SelectReq("Select meshes to convert", kinds=("mesh",))
     from ..core.mesh import brep_from_mesh
+    from .base import OptionReq
+    big = [(o, len(o.shape.triangles)) for o in objs
+           if len(getattr(o.shape, "triangles", ())) > MESHTOBREP_ASK]
+    for o, n in big:
+        if n > MESHTOBREP_REFUSE:
+            ctx.echo(f"{o.name} has {n:,} triangles. To Surfaces makes a "
+                     "face per triangle — minutes of work for a solid "
+                     "nothing can edit. For a scan, fit a surface to it "
+                     "instead. Nothing converted.")
+            return
+    if big:
+        worst = max(n for _, n in big)
+        go = yield OptionReq(f"{len(big)} mesh(es) have up to {worst:,} "
+                             "triangles; a face per triangle will take a "
+                             "while and give a heavy solid. Continue?",
+                             options=["No", "Yes"], default="No")
+        if go != "Yes":
+            ctx.echo("Nothing converted.")
+            return
     done = 0
     for o in objs:
         try:
