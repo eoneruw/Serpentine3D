@@ -144,6 +144,8 @@ nudge the selection along the CPlane (Shift ×10, Ctrl ×0.1).
   Toggle types on the **osnap bar** under the command line, or in
   Settings. `gridsnap` snaps picked points to the grid
 - Launch with a file: `serp3d model.serp` (or any importable format)
+- Drop a file on the window to import it — any format Import reads
+  (`.step` `.3dm` `.obj` `.stl` `.ply` …); a dropped `.serp` opens
 
 ## Drafting & documentation
 

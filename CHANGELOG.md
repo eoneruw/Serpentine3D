@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Drop a file on the window to import it.** Any format Import reads —
+  `.step`, `.3dm`, `.obj`, `.fbx`, `.stl`, `.dxf`, `.svg`, `.ply` — can be
+  dragged from the Finder or Explorer onto Serpentine3D;
+  several at once import in order, each its own undo step. A dropped
+  `.serp` opens, as a document would. Only images could be dropped before
+  (they still land as pictures in the viewport).
 - **ExtendSrf gives back one surface, and MergeSrf makes one of two.**
   Extending a surface sewed a strip onto it, and the result was two
   faces: Points On said "explode polysurfaces first", and a pulled
