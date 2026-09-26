@@ -4676,8 +4676,7 @@ class Viewport(QOpenGLWidget):
         if hits:
             self._pick_boxed_cvs(hits, modifiers)
             return None
-        if (modifiers & Qt.KeyboardModifier.ControlModifier
-                and modifiers & Qt.KeyboardModifier.ShiftModifier):
+        if subobject_chord(modifiers):
             # the chord that clicks one face, edge or segment sweeps them
             # up by the band-full, adding to what is held (issue #30). It
             # is asking for parts, so it never falls through to objects.
