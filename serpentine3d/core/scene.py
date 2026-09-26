@@ -186,6 +186,9 @@ class Scene:
         # scene rather than a pane because the sky is one sky however
         # many panes look at it. See ui/ibl.py for the environments.
         self.environment: dict = dict(DEFAULT_ENVIRONMENT)
+        # bumped when a display mesh changes without the geometry moving
+        # (a quality change, a worker's cut landing): panes read it
+        self.mesh_epoch = 0
         self.named_views: dict = {}     # name -> camera params
         # Objects showing their control points. Kept here rather than on a
         # viewport because points on is something the drawing is doing: turn
@@ -368,6 +371,31 @@ class Scene:
             return
         self.environment = env
         self.notify("environment")
+    def drop_meshes(self, ids=None):
+        """Forget the display meshes (of `ids`, or of everything), so the
+        next frame cuts them afresh — after the mesh quality changes, or
+        after a drag that meshed at preview quality. The geometry is
+        untouched."""
+        objs = (self.objects.values() if ids is None
+                else [o for o in (self.objects.get(i) for i in ids)
+                      if o is not None])
+        for obj in objs:
+            obj._mesh = None
+        # no notify: the geometry is what it was, so this is not an edit
+        # (it must not make a saved file dirty); the mesh epoch is what
+        # tells every pane its GPU copy is stale
+        self.mesh_epoch += 1
+
+    def take_mesh(self, obj_id: str, shape, mesh) -> bool:
+        """A mesh cut on a worker lands: keep it if the object still has
+        the shape it was cut from (an edit meanwhile makes it stale).
+        Returns whether it was taken."""
+        obj = self.objects.get(obj_id)
+        if obj is None or obj._shape is not shape:
+            return False
+        obj._mesh = mesh
+        self.mesh_epoch += 1
+        return True
 
     def realise_layer(self, layer_id: str) -> int:
         """Convert everything still deferred on a layer. Returns how many.

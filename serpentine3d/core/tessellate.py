@@ -120,13 +120,188 @@ class DisplayMesh:
 # 0.15 (8.6 degrees) is about two and a half times the triangles on a
 # sphere and unnoticeable on a box; the linear deflection below still
 # decides most of the count on a big model.
-ANGULAR_DEFLECTION = 0.15
+# The display mesh quality: how fine a curved surface is cut into
+# triangles for the screen. (linear deflection as a fraction of the
+# object's size, angular deflection in radians.) Normal is what every
+# mode used to get. Fine and Very fine are for the reflective modes: a
+# mirror-like reflection is read off interpolated normals, and across a
+# big triangle the interpolation is only straight, so a smooth bonnet
+# shows the triangle edges as creases in the highlight. Coarse is for a
+# scan-heavy scene that has to stay quick.
+# Fine and Very fine were (0.0008, 0.06) and (0.0004, 0.03): a surface
+# with a few rows of handles took six seconds at Very fine and forty
+# when folded, on the main thread, and the app was a beach ball for all
+# of it. These are about a third of the triangles for the same look —
+# and the cut after a drag happens on a worker now (see
+# Viewport.recut_in_background), the preview mesh staying up meanwhile.
+MESH_QUALITIES = {
+    "coarse": (0.004, 0.30),
+    "normal": (0.002, 0.15),
+    "fine": (0.001, 0.08),
+    "very fine": (0.0006, 0.05),
+}
+#: The label each quality is shown under — the one place for them.
+MESH_QUALITY_LABELS = {
+    "coarse": "Coarse",
+    "normal": "Normal",
+    "fine": "Fine",
+    "very fine": "Very fine",
+}
+ANGULAR_DEFLECTION = MESH_QUALITIES["normal"][1]      # what STL export scales
+_QUALITY = "normal"
 
 
-def _deflection_for(shape) -> float:
+def set_mesh_quality(name: str):
+    """Pick a display mesh quality by name. Meshes already made are not
+    touched: whoever changes this drops them (Scene.drop_meshes)."""
+    global _QUALITY
+    if name not in MESH_QUALITIES:
+        raise ValueError(f"unknown mesh quality {name!r}")
+    _QUALITY = name
+
+
+def mesh_quality() -> str:
+    return _QUALITY
+
+
+# While a control point or a gumball handle is being dragged, the shape is
+# cut again on every mouse move. At Fine that is fine; at Very fine a
+# bonnet takes over a second a cut, and the drag stops following the
+# mouse. So a drag meshes at Normal — what every drag got before there
+# was a setting — and the real quality comes back on release, when the
+# objects that moved are cut once more, properly.
+_PREVIEW = False
+_PREVIEW_QUALITY = "normal"
+_ORDER = list(MESH_QUALITIES)
+
+
+def begin_preview():
+    """Mesh at no finer than Normal until end_preview(). A flag, not a
+    count: a drag that starts on top of another (a handle taken while one
+    is still armed) must not leave the preview stuck on for good."""
+    global _PREVIEW
+    _PREVIEW = True
+
+
+def end_preview():
+    global _PREVIEW
+    _PREVIEW = False
+
+
+def preview_is_coarser() -> bool:
+    """Whether a preview cut is any different from the real one — when it
+    is not, a drag's meshes are as good as final and can be kept."""
+    return _ORDER.index(_QUALITY) > _ORDER.index(_PREVIEW_QUALITY)
+
+
+def _active_quality(preview: bool = False) -> str:
+    if (preview or _PREVIEW) and preview_is_coarser():
+        return _PREVIEW_QUALITY
+    return _QUALITY
+
+
+def _deflection_for(shape, preview: bool = False) -> float:
     (mn, mx) = geometry.bbox(shape)
     diag = float(np.linalg.norm(np.subtract(mx, mn)))
-    return max(diag * 0.002, 1e-4)
+    return max(diag * MESH_QUALITIES[_active_quality(preview)][0], 1e-4)
+
+
+def _meshed_finer_than(shape, deflection: float) -> bool:
+    """Whether the shape already carries a triangulation cut well finer
+    (under half the deflection) than what is being asked for.
+
+    The mesher stores the deviation it achieved, which is 0 on a planar
+    face whatever was asked, so those say nothing; the coarsest of the
+    curved faces is what was asked for last time."""
+    worst = 0.0
+    exp = TopExp_Explorer(shape, occ.FACE)
+    while exp.More():
+        tri = occ.triangulation(occ.to_face(exp.Current()), TopLoc_Location())
+        exp.Next()
+        if tri is not None:
+            worst = max(worst, float(tri.Deflection()))
+    return worst > 0.0 and worst < deflection * 0.5
+
+
+# -- cutting in another process ----------------------------------------
+#
+# BRepMesh holds the GIL for the whole of a cut (OCP does not let go of
+# it), so a worker thread frees the event loop for none of it: a mesh
+# cut on a thread is a beach ball all the same. A helper process is the
+# only way the app keeps turning while a heavy surface is cut. One is
+# spawned on first use and kept: it pays the kernel's import once.
+
+_CUTTER = None
+
+
+def _cutter():
+    global _CUTTER
+    if _CUTTER is None:
+        import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor
+        from ..utils.spawn import spawn_executable
+        ctx = mp.get_context("spawn")
+        exe = spawn_executable()
+        if exe:
+            ctx.set_executable(exe)
+        _CUTTER = ProcessPoolExecutor(max_workers=1, mp_context=ctx,
+                                      initializer=_cutter_init)
+        import atexit
+        # shut it down while the interpreter is whole: an executor left
+        # to the garbage collector at exit complains from a torn-down
+        # module ('NoneType' object has no attribute 'util')
+        atexit.register(stop_cutter)
+    return _CUTTER
+
+
+def _cutter_init():
+    """Runs in the helper as it starts. Ctrl-C in the terminal reaches
+    the helper too (same process group) and it died with a traceback
+    on the terminal; it leaves that to the app, which ends it properly
+    on the way out."""
+    import signal
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+
+
+def stop_cutter():
+    """End the helper process, if one was started — waiting for it, so
+    its queues and semaphores are cleaned up rather than reported as
+    leaked at shutdown."""
+    global _CUTTER
+    if _CUTTER is not None:
+        try:
+            _CUTTER.shutdown(wait=True, cancel_futures=True)
+        except Exception:                                  # noqa: BLE001
+            pass
+        _CUTTER = None
+
+
+def cut_elsewhere(shape, quality: str | None = None):
+    """A future for the shape's display mesh, cut in the helper process
+    at `quality` (the current one when None) and with curvature if the
+    display wants it. The result is a DisplayMesh with a uid of this
+    process's own."""
+    from . import geometry
+    data = geometry.shape_to_bytes(shape)
+    future = _cutter().submit(_cut_job, data, quality or _QUALITY,
+                              _CURVATURE)
+    return future
+
+
+def _cut_job(data: bytes, quality: str, curvature: bool):
+    """Runs in the helper process."""
+    from . import geometry
+    set_mesh_quality(quality)
+    set_curvature_enabled(curvature)
+    return tessellate(geometry.shape_from_bytes(data))
+
+
+def landed(mesh):
+    """A mesh back from the helper, given a uid of this process's own —
+    the helper's count means nothing here."""
+    from dataclasses import replace
+    return replace(mesh, uid=next(_uids), _tri_index=None, _seg_index=None,
+                   _bounds=None)
 
 
 def default_deflection(shape) -> float:
@@ -390,7 +565,8 @@ def _face_isocurves(face) -> list[np.ndarray]:
 
 
 def tessellate(shape, deflection: float | None = None,
-               angular: float | None = None) -> DisplayMesh:
+               angular: float | None = None,
+               preview: bool = False) -> DisplayMesh:
     from .mesh import MeshShape, mesh_to_display
     from .pointcloud import PointCloudShape, cloud_to_display
     if isinstance(shape, MeshShape):
@@ -398,10 +574,16 @@ def tessellate(shape, deflection: float | None = None,
     if isinstance(shape, PointCloudShape):
         return cloud_to_display(shape)
     if deflection is None:
-        deflection = _deflection_for(shape)
+        deflection = _deflection_for(shape, preview)
     if angular is None:
-        angular = ANGULAR_DEFLECTION
+        angular = MESH_QUALITIES[_active_quality(preview)][1]
     if geometry.shape_kind(shape) != "curve":
+        if _meshed_finer_than(shape, deflection):
+            # The mesher keeps a triangulation that is already finer than
+            # asked, so going back from Very fine to Normal would keep
+            # every Very fine mesh — and none of the speed it was left for.
+            from OCP.BRepTools import BRepTools
+            BRepTools.Clean_s(shape)
         BRepMesh_IncrementalMesh(shape, deflection, False, angular, True)
 
     all_verts, all_norms, all_tris, all_curv, isos = [], [], [], [], []

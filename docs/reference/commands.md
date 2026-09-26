@@ -86,6 +86,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `left` | Left |
 | `length` (`len`) | Length |
 | `maxviewport` (`max`, `maximizeviewport`) | Give the pane you are in the whole window; again puts it back. |
+| `meshquality` | Set how finely curved surfaces are cut into triangles for the screen. |
 | `namedview` (`nv`) | Namedview |
 | `newviewport` (`newvp`, `splitview`) | Open an extra live viewport in a dockable panel — drag its title bar to rearrange or tear it off to float; a pane's own title menu picks what it shows, so a paper sheet can sit beside the model. |
 | `ortho` | Toggle ortho: picked points lock to CPlane axes from the last point (hold Shift for the momentary opposite). |

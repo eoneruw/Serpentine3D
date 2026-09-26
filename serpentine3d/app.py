@@ -77,6 +77,12 @@ class MainWindow(QMainWindow):
         from .utils.config import Config
         self.cfg = Config()
         self.scene = Scene()
+        # The display mesh quality is process-wide (Display panel, "Mesh"),
+        # so it is applied once here before any pane cuts a mesh.
+        from .core import tessellate
+        quality = self.cfg.get("display", "mesh_quality", default="normal")
+        if quality in tessellate.MESH_QUALITIES:
+            tessellate.set_mesh_quality(quality)
         from .utils.units import UNITS
         default_units = self.cfg.get("default_units", default="mm")
         if default_units in UNITS:
@@ -642,7 +648,8 @@ class MainWindow(QMainWindow):
             dialog = None
         if dialog is None:
             dialog = DisplaySettingsDialog(
-                vp, self, all_panes=lambda: self.all_viewports())
+                vp, self, all_panes=lambda: self.all_viewports(),
+                config=self.cfg)
             self._display_settings = dialog
 
             def forget(_result):
@@ -3125,9 +3132,12 @@ def run_app(app, splash=None):
     if file_assoc.should_offer(window.cfg):
         _offer_default_app(window)
     window.start_update_check()
-    code = app.exec()
-    _log.stop()
-    return code
+    try:
+        return app.exec()
+    finally:
+        from .core import tessellate
+        tessellate.stop_cutter()        # the mesh helper, while whole
+        _log.stop()
 
 
 def main():

@@ -127,6 +127,20 @@
 
 ### Added
 
+- **Mesh quality.** The Display panel has a **Mesh** row — Coarse, Normal,
+  Fine, Very fine — and a `meshquality` command, remembered in settings.
+  Normal is what every mode used to get. A mirror-like reflection in
+  Rendered reads the normal between a triangle's corners, so a big
+  triangle across a gently curved bonnet showed the triangle edges as
+  creases in the highlight; Fine or Very fine cuts the panel finely enough
+  that they go. Coarse keeps a scan-heavy scene quick. Dragging a control
+  point or a gumball handle meshes at Normal whatever the setting — at Very
+  fine a bonnet takes over a second a cut, and the drag stopped following
+  the mouse — as does a command's ghost preview. The proper cut after a
+  drag, and after a quality change, happens in a helper process (the
+  kernel holds the interpreter lock for a cut, so a thread would not
+  do) with the old mesh staying up until the new one lands, so a heavy
+  surface never beach-balls the app.
 - **ExtendSrf gives back one surface, and MergeSrf makes one of two.**
   Extending a surface sewed a strip onto it, and the result was two
   faces: Points On said "explode polysurfaces first", and a pulled

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..core import linetype as _lt
 from ..core import spatial
+from ..core import tessellate
 from ..utils import config as _cfg
 from ..utils import debuglog
 from ..utils import units as _units
@@ -1111,6 +1112,7 @@ class Viewport(QOpenGLWidget):
     textEditRequested = Signal(str)          # editable model text, by id
     paperTextEditRequested = Signal(str)     # editable paper note, by id
     _tessDone = Signal()                    # a background mesh finished
+    _recutDone = Signal(object)             # (obj_id, shape, mesh) from a worker
 
     def __init__(self, scene, selection, config=None, parent=None):
         super().__init__(parent)
@@ -1249,6 +1251,8 @@ class Viewport(QOpenGLWidget):
         self._centre_cache: dict[str, np.ndarray] = {}
         self._tessDone.connect(self._on_tess_done,
                                Qt.ConnectionType.QueuedConnection)
+        self._recutDone.connect(self._on_recut_done,
+                                Qt.ConnectionType.QueuedConnection)
         self._preview: _LineBatch | None = None
         self._preview_data = np.zeros((0, 3), np.float32)
         self._ghost = None                     # DisplayMesh of pending result
@@ -2164,6 +2168,7 @@ class Viewport(QOpenGLWidget):
         """Everything the reconcile below reads, so it can be skipped when
         none of it has moved. See `_sync_gpu`."""
         return (self.scene.revision, self._tess_epoch,
+                getattr(self.scene, "mesh_epoch", 0),
                 self._layer_linetypes(), self._visible_layers())
 
     def _sync_gpu(self):
@@ -2189,7 +2194,7 @@ class Viewport(QOpenGLWidget):
         self._gpu_synced = key
         live = set()
         live_meshes = set()
-        layer_types = key[2]
+        layer_types = key[3]           # after the scene's mesh epoch
         for obj in self._gpu_candidates():
             live.add(obj.id)
             gpu = self._gpu.get(obj.id)
@@ -3363,7 +3368,9 @@ class Viewport(QOpenGLWidget):
             return
         try:
             from ..core.tessellate import tessellate
-            self._ghost = tessellate(shape)
+            # A ghost is redrawn on every mouse move, so it is cut at no
+            # finer than Normal; the result is cut properly once it is made.
+            self._ghost = tessellate(shape, preview=True)
         except Exception:                                  # noqa: BLE001
             self._ghost = None
         self.update()
@@ -4694,6 +4701,7 @@ class Viewport(QOpenGLWidget):
                 fwd = fwd / max(np.linalg.norm(fwd), 1e-12)
                 self._cv_drag = (obj_id, index, np.asarray(world), fwd)
                 self._cv_drag_group = self._held_points_from()
+                tessellate.begin_preview()      # cut coarsely while it moves
                 self.cvEditBegan.emit()
                 return
             self._begin_hold(pos, ev.modifiers())
@@ -5029,12 +5037,76 @@ class Viewport(QOpenGLWidget):
             self._release_gumball(ev)
             return
         if self._cv_drag is not None:
-            self._cv_drag = None
-            self._active_snap = None       # the marker goes with the drag
-            self.update()
-            self._cv_drag_group = []
+            self._end_cv_drag()
             return
         self._finish_pick(ev)
+
+    def _end_cv_drag(self):
+        """Let go of a control point, on release or on Escape: the
+        preview meshing ends and what moved is cut properly."""
+        moved = {self._cv_drag[0]} | {oid for oid, _, _ in
+                                      (self._cv_drag_group or [])}
+        self._cv_drag = None
+        self._cv_drag_group = []
+        self._active_snap = None       # the marker goes with the drag
+        self._end_mesh_preview(moved)
+        self.update()
+
+    def _end_mesh_preview(self, moved_ids):
+        """A drag is over: mesh at the real quality again, and cut the
+        objects it moved once more if the drag's cut was coarser."""
+        tessellate.end_preview()
+        if moved_ids and tessellate.preview_is_coarser():
+            self.recut_in_background(moved_ids)
+
+    def recut_in_background(self, ids=None):
+        """Cut these objects' meshes (all of them when None) again at the
+        current quality, in the helper process, keeping what is on screen
+        until each new one lands.
+
+        The cut after a drag, or after the quality changes, used to happen
+        on the next paint, on the main thread: at Very fine a surface with
+        a few rows of handles takes seconds, and one that has been folded
+        forty, and the app was a beach ball for all of it. A thread would
+        not do: the kernel holds the GIL for the whole of a cut. So the
+        helper process cuts, the old (preview) mesh stays up, the real one
+        arrives, and a further edit meanwhile makes the arriving one
+        stale, which the scene refuses.
+        """
+        from ..core.mesh import MeshShape
+        from ..core.pointcloud import PointCloudShape
+        objs = (list(self.scene.objects.values()) if ids is None
+                else [o for o in (self.scene.objects.get(i) for i in ids)
+                      if o is not None])
+        for obj in objs:
+            shape = obj._shape
+            if shape is None or isinstance(shape, (MeshShape,
+                                                   PointCloudShape)):
+                continue            # not cut from a quality: nothing to do
+            try:
+                future = tessellate.cut_elsewhere(shape)
+            except Exception:                              # noqa: BLE001
+                continue            # no helper: the next paint cuts it
+
+            def done(fut, oid=obj.id, shape=shape):
+                try:
+                    mesh = fut.result()
+                except Exception:                          # noqa: BLE001
+                    mesh = None         # no helper: the next paint cuts it
+                self._recutDone.emit((oid, shape, mesh))
+
+            future.add_done_callback(done)
+
+    def _on_recut_done(self, payload):
+        oid, shape, mesh = payload
+        if mesh is None:
+            obj = self.scene.objects.get(oid)
+            if obj is not None and obj._shape is shape:
+                self.scene.drop_meshes([oid])      # cut here, on the paint
+                self.update()
+            return
+        if self.scene.take_mesh(oid, shape, tessellate.landed(mesh)):
+            self.update()
 
     def _finish_swipe(self, ev) -> bool:
         """Let go of an Alt swipe: turn to face the axis, or leave it be.
@@ -5699,6 +5771,9 @@ class Viewport(QOpenGLWidget):
             if self.gumball.drag is not None:
                 self.gumball.cancel_drag()
                 self.update()
+                return
+            if self._cv_drag is not None:
+                self._end_cv_drag()
                 return
             self.escapePressed.emit()
         else:

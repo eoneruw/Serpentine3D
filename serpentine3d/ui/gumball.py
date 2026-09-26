@@ -22,6 +22,7 @@ from OpenGL import GL
 from PySide6.QtCore import Qt
 
 from ..core import geometry as g
+from ..core import tessellate
 from ..utils.math3d import ray_line_parameter, ray_plane_any
 
 AXIS_COLORS = ((0.86, 0.33, 0.31), (0.42, 0.72, 0.35), (0.35, 0.55, 0.92))
@@ -1441,7 +1442,19 @@ class Gumball:
             "typed": "", "armed": False, "moved": False,
         }
         vp.selection.rebuilding = self.rebuilding_id()
+        tessellate.begin_preview()          # cut coarsely while it moves
+        self.drag["preview"] = True
         return True
+
+    def _end_mesh_preview(self, d):
+        """The drag is over: mesh at the real quality again, and cut what
+        it moved once more if the drag's cuts were coarser."""
+        tessellate.end_preview()
+        if d is None or not d.get("preview"):
+            return
+        moved = set(d["originals"]) | set((d.get("made") or {}).values())
+        if moved and tessellate.preview_is_coarser():
+            self.vp.recut_in_background(moved)
 
     def drag_to(self, px, py, modifiers) -> str:
         d = self.drag
@@ -1718,6 +1731,10 @@ class Gumball:
         """Keep an un-dragged handle click alive so a value can be typed."""
         if self.drag is not None and self.drag["handle"][0] in _ONE_DOF:
             self.drag["armed"] = True
+            # nothing moves while a value is typed, and a result made
+            # meanwhile must not be cut coarsely
+            tessellate.end_preview()
+            self.drag["preview"] = False
 
     # What is being held is either whole objects or some of one object's
     # control points, and every handle has to do the same thing to both. A
@@ -2013,6 +2030,8 @@ class Gumball:
                     self.vp.selection.set(made)
         self.vp.selection.rebuilding = None
         self.drag = None
+        if d is not None:
+            self._end_mesh_preview(d)
 
     def _clear_filleted_edges(self, d):
         """A committed fillet consumes the picked edges (their indices now
@@ -2185,6 +2204,7 @@ class Gumball:
         self.vp.window_discard_checkpoint()
         self.vp.selection.rebuilding = None
         self.drag = None
+        self._end_mesh_preview(d)
 
 
 def _frame(axis):
