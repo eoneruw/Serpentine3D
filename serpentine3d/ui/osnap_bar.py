@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QToolButton, QWidget
 
 from ..core.snaps import SNAP_TYPES
 
@@ -36,13 +36,19 @@ class OsnapBar(QWidget):
         layout.setContentsMargins(8, 1, 8, 3)
         layout.setSpacing(2)
 
-        title = QLabel("Osnap:")
-        title.setStyleSheet("color: #85868a; font-size: 11px;")
-        layout.addWidget(title)
-
+        # The word itself is the master switch: click Osnap and every
+        # snap is off until it is clicked again, the type buttons greyed
+        # meanwhile but keeping their settings. A separate "On" button
+        # beside a label read as one more snap type, and people looking
+        # for the way to pause snapping did not find it.
         self._master = self._button(
-            "On", "Master object-snap toggle (hold Alt to skip the snaps "
-            "for one pick or drag)")
+            "Osnap", "Object snaps on or off — click to pause every snap "
+            "and keep the settings (hold Alt to skip them for one pick "
+            "or drag)")
+        self._master.setStyleSheet(
+            "QToolButton { font-size: 11px; padding: 1px 7px; "
+            "font-weight: bold; }"
+            "QToolButton:!checked { color: #8a8b90; }")
         self._master.setChecked(viewport.snaps.enabled)
         self._master.toggled.connect(self._master_toggled)
         layout.addWidget(self._master)
@@ -55,6 +61,8 @@ class OsnapBar(QWidget):
                 lambda on, kind=t: self._type_toggled(kind, on))
             layout.addWidget(btn)
             self._buttons[t] = btn
+        for btn in self._buttons.values():
+            btn.setEnabled(viewport.snaps.enabled)
 
         layout.addSpacing(12)
         self._grid = self._button("Grid", "Snap picked points to the grid")
@@ -73,12 +81,21 @@ class OsnapBar(QWidget):
         btn.setText(text)
         btn.setToolTip(tip)
         btn.setCheckable(True)
+        # The theme colours every tool button the same, disabled or not,
+        # so a paused snap looked exactly like a live one. Paused is dim:
+        # the text goes grey, a lit one keeps a ghost of its gold.
         btn.setStyleSheet(
-            "QToolButton { font-size: 11px; padding: 1px 7px; }")
+            "QToolButton { font-size: 11px; padding: 1px 7px; }"
+            "QToolButton:disabled { color: #56575c; background: #232427;"
+            " border-color: transparent; }"
+            "QToolButton:checked:disabled { color: #7a6a4a;"
+            " background: #2c2a26; border-color: #4a4230; }")
         return btn
 
     def _master_toggled(self, on: bool):
         self.viewport.snaps.enabled = on
+        for btn in self._buttons.values():
+            btn.setEnabled(on)
         if self.config:
             self.config.set("osnaps", "enabled", on)
 
