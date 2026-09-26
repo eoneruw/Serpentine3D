@@ -520,7 +520,7 @@ class MainWindow(QMainWindow):
             lay = next((l for l in self.scene.layouts if l.id == vp.space),
                        None)
             place = lay.name if lay else "Layout"
-        return f"{place} · {vp.display_mode.capitalize()}"
+        return f"{place} · {vp.mode_label(vp.display_mode)}"
 
     def _update_viewport_dock_title(self, vp):
         dock = vp.parentWidget()
@@ -566,7 +566,7 @@ class MainWindow(QMainWindow):
                    lambda n=name: vp.go_to_view(n))
         menu.addSeparator()
         for mode in vp.DISPLAY_MODES:
-            toggle(mode.capitalize(), vp.display_mode == mode,
+            toggle(vp.mode_label(mode), vp.display_mode == mode,
                    lambda m=mode: vp.set_display_mode(m))
         self._action(menu, "Display settings…", None,
                      lambda: self._show_display_settings(vp))
@@ -896,6 +896,8 @@ class MainWindow(QMainWindow):
                      lambda: self.run_command("ghosted"))
         self._action(m_view, "Rendered", None,
                      lambda: self.run_command("rendered"))
+        self._action(m_view, "Rendered (PBR)", None,
+                     lambda: self.run_command("pbr"))
         self._action(m_view, "Technical", None,
                      lambda: self.run_command("technical"))
         m_view.addSeparator()
