@@ -246,6 +246,8 @@ class MainWindow(QMainWindow):
         self.command_line.submitted.connect(self._on_submit)
         self.command_line.cancelled.connect(self._cancel)
         self.command_line.optionClicked.connect(self._on_option_chip)
+        self.command_line.optionScrubbed.connect(self._on_option_scrub)
+        self.command_line.numberScrubbed.connect(self._on_number_scrub)
         self.command_line.keywordClicked.connect(self._on_keyword_chip)
         self.command_line.tabPressed.connect(self._toggle_direction_lock)
         self.command_line.input.textEdited.connect(self._live_preview)
@@ -1106,6 +1108,32 @@ class MainWindow(QMainWindow):
         self._live_preview(self.command_line.input.text())
         self.command_line.focus()
 
+    def _on_number_scrub(self, value: float, final: bool):
+        """The prompt's own number dragged: it lands in the input line,
+        the ghost follows, and Enter takes it."""
+        text = f"{value:g}"
+        self.command_line.input.setText(text)
+        self._live_preview(text)
+        if final:
+            self.command_line.focus()
+
+    def _model_scale(self) -> float:
+        """Roughly how big the model is, for a drag step that suits it."""
+        try:
+            lo, hi = self.scene.bbox()
+            d = sum((b - a) ** 2 for a, b in zip(lo, hi)) ** 0.5
+            return d if d > 1e-6 else 100.0
+        except Exception:                                  # noqa: BLE001
+            return 100.0
+
+    def _on_option_scrub(self, name: str, value: float, final: bool):
+        """A number chip dragged: the value lands on every move, the
+        history hears of it when the drag ends."""
+        self.processor.set_option(name, f"{value:g}", quiet=not final)
+        if final:
+            self._live_preview(self.command_line.input.text())
+            self.command_line.focus()
+
     def _on_keyword_chip(self, word: str):
         """A keyword chip answers the prompt outright, as typing it would."""
         self.processor.provide_text(word)
@@ -1153,7 +1181,15 @@ class MainWindow(QMainWindow):
             else:
                 req.prompt = "Text position (baseline anchor)"
         self.command_line.set_prompt(self.processor.prompt_text())
-        self.command_line.set_options(self.processor.option_chips())
+        chips = self.processor.option_chips()
+        scrubs = {n: self.processor.option_scrub(n) for n, _ in chips}
+        self.command_line.set_options(
+            chips, {n: sc for n, sc in scrubs.items() if sc is not None})
+        # this runs on every notify — every pixel of a chip drag — and the
+        # model's size is only wanted when the prompt takes a number
+        self.command_line.set_number_scrub(
+            self.processor.number_scrub(self._model_scale())
+            if self.processor.wants_number() else None)
         self.command_line.set_keywords(self.processor.keyword_chips())
         # every pane, because a ghost is set on every pane: clearing one of
         # them leaves a preview on the others that no command owns any more.

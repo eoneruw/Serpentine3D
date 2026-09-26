@@ -3,7 +3,7 @@ unroll."""
 
 from ..core import geometry as g
 from .base import (
-    NumberReq, OptionReq, PointReq, SelectReq, TextReq, TextEditorReq,
+    NumberReq, OptionReq, PointReq, Scrub, SelectReq, TextReq, TextEditorReq,
     command, has_text_editor,
 )
 
@@ -467,18 +467,36 @@ def cmd_extractsrf(ctx):
              + (" as copies." if copy == "Yes" else "."))
 
 
-def _picked_face_edges(ctx):
-    """[(obj, face_shape, edge_shape, edge_index)] from Ctrl+Shift picks."""
+def _picked_face_edges(ctx, why: list | None = None):
+    """[(obj, face_shape, edge_shape, edge_index)] from Ctrl+Shift picks.
+
+    A pick that cannot be used is dropped, and if `why` is given a line
+    saying what was wrong with it goes there — an edge of a mesh, a
+    face where an edge was wanted — so the command can say why it saw
+    fewer edges than were picked.
+    """
     out = []
     for (obj_id, kind, idx) in ctx.selection.subobjects:
-        if kind != "edge":
-            continue
         obj = ctx.scene.get(obj_id)
         if obj is None:
+            continue
+        if kind != "edge":
+            if why is not None:
+                why.append(f"{obj.name}: a {kind} is picked, not an edge")
+            continue
+        if obj.kind in ("mesh", "pointcloud", "picture"):
+            if why is not None:
+                why.append(f"{obj.name} is a {obj.kind}, not a surface"
+                           + (" — MeshToBrep it first"
+                              if obj.kind == "mesh" else ""))
             continue
         edges = g.edges_of(obj.shape)
         faces = g.faces_of(obj.shape)
         if not (0 <= idx < len(edges)) or not faces:
+            if why is not None:
+                why.append(f"{obj.name}: edge {idx} is not one of its "
+                           f"{len(edges)} edges" if faces else
+                           f"{obj.name} has no faces to blend from")
             continue
         edge = edges[idx]
         support = next(
@@ -534,16 +552,121 @@ def cmd_extendsrf(ctx):
 
 @command("blendsrf")
 def cmd_blendsrf(ctx):
-    """G1 blend surface between two Ctrl+Shift-picked surface edges."""
-    picked = _picked_face_edges(ctx)
+    """Blend surface across the gap between two surface edges.
+
+    Ctrl+Shift-click an edge on each surface first, or run it and pick
+    them at the prompt. The blend leaves each surface tangent to it
+    and appears at once; then Bulge says how far the sections reach
+    before turning for the far edge (1 is the even S-curve, type a
+    number to see another), Continuity Position drops the tangency
+    for a surface that only meets the edges, and Enter keeps what is
+    on screen.
+    """
+    why: list = []
+    picked = _picked_face_edges(ctx, why)
+    for line in why:
+        ctx.echo(line)
     if len(picked) != 2:
-        ctx.echo("Ctrl+Shift-click one edge on each of two surfaces, "
-                 "then run BlendSrf.")
-        yield from ()
+        yield SelectReq("Ctrl+Shift-click one edge on each of the two "
+                        "surfaces, then Enter",
+                        min_count=0, allow_preselected=False)
+        why = []
+        picked = _picked_face_edges(ctx, why)
+        for line in why:
+            ctx.echo(line)
+    if len(picked) != 2:
+        held = len(ctx.selection.subobjects)
+        ctx.echo(f"BlendSrf needs one edge picked on each of two surfaces "
+                 f"— {len(picked)} usable of {held} picked. Nothing made.")
         return
     (oa, fa, ea, _), (ob, fb, eb, _) = picked
-    blend = g.blend_surfaces(fa, ea, fb, eb)
-    obj = ctx.scene.add(blend, layer_id=oa.layer_id)
-    ctx.echo(f"Created blend {obj.name} between "
-             f"{oa.name} and {ob.name}.")
-    yield from ()
+    bulge = 1.0
+    continuity = "Tangent"
+
+    def build(b, cont, sections=g.BLEND_SECTIONS):
+        return g.blend_between_edges(
+            fa, ea, fb, eb, bulge=b,
+            continuity="G0" if cont == "Position" else "G1",
+            sections=int(sections))
+
+    try:
+        shape = build(bulge, continuity)
+        how = ""
+    except g.GeometryError:
+        # the sections would not loft: the filling-based fallbacks, which
+        # take no bulge but still put a surface across the gap
+        shape, how = g.blend_surfaces_somehow(fa, ea, fb, eb)
+        if how == "G1":
+            how = ""
+    obj = ctx.scene.add(shape, layer_id=oa.layer_id)
+    ctx.select_result([obj])
+    if how:
+        ctx.echo(f"Created blend {obj.name} between {oa.name} and "
+                 f"{ob.name} — {how}.")
+        return
+
+    try:
+        yield from _shape_the_blend(ctx, obj, build, bulge, continuity)
+    except GeneratorExit:
+        # Escape: the blend goes with the command, the way Rhino's does
+        ctx.scene.remove(obj.id)
+        raise
+
+
+def _shape_the_blend(ctx, obj, build, bulge, continuity):
+    """The bulge prompt: drag the chip, click the other, Enter keeps.
+
+    Bulge is a chip you drag sideways and the blend follows as you go;
+    Continuity is a chip a click flips between Tangent and Position.
+    A typed number is a bulge too, and Bulge=2 the long way round.
+    """
+    state = {"bulge": bulge, "continuity": continuity,
+             "sections": g.BLEND_SECTIONS}
+
+    def rebuild(name, value):
+        want = dict(state)
+        if name == "Bulge":
+            want["bulge"] = float(value)
+        elif name == "Sections":
+            want["sections"] = int(float(value))
+        else:
+            want["continuity"] = value
+        # raises GeometryError for set_option to report; the last good
+        # blend stays on screen and the state stays with it
+        shape = build(want["bulge"], want["continuity"], want["sections"])
+        state.update(want)
+        ctx.scene.replace_shape(obj.id, shape)
+
+    def ghost(v):
+        if isinstance(v, (int, float)) and v > 0:
+            try:
+                return build(float(v), state["continuity"],
+                             state["sections"])
+            except g.GeometryError:
+                return None
+        return None
+
+    while True:
+        p = yield PointReq("Blend: drag Bulge or Sections, click "
+                           "Continuity, Enter to keep it",
+                           allow_empty=True, allow_number=True,
+                           choices={"Bulge": Scrub(state["bulge"], 0.05,
+                                                   5.0, step=0.01),
+                                    "Continuity": ["Tangent", "Position"],
+                                    "Sections": Scrub(state["sections"],
+                                                      3, 60, step=0.1,
+                                                      integer=True)},
+                           on_option=rebuild, preview_fn=ghost)
+        if p is None or isinstance(p, (tuple, list)):
+            break
+        if isinstance(p, (int, float)):
+            if p <= 0:
+                ctx.echo("Bulge must be positive.")
+                continue
+            try:
+                rebuild("Bulge", p)
+            except g.GeometryError as exc:
+                ctx.echo(f"Bulge {p:g}: {exc}")
+    ctx.echo(f"Created blend {obj.name} (bulge {state['bulge']:g}, "
+             f"{state['continuity'].lower()}, {state['sections']} "
+             "sections).")

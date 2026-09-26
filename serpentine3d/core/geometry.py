@@ -4128,8 +4128,12 @@ def extend_surface(shape, edge_index: int, length: float) -> TopoDS_Shape:
     return out
 
 
-def blend_surfaces(face_a, edge_a, face_b, edge_b) -> TopoDS_Shape:
-    """G1 blend surface between two surface edges (straight side rails)."""
+def blend_surfaces(face_a, edge_a, face_b, edge_b,
+                   continuity: str = "G1") -> TopoDS_Shape:
+    """Blend surface between two surface edges (straight side rails).
+
+    G1 leaves the two surfaces tangentially; G0 only meets their edges.
+    """
     import math
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeFilling
     from OCP.GeomAbs import GeomAbs_Shape
@@ -4138,21 +4142,234 @@ def blend_surfaces(face_a, edge_a, face_b, edge_b) -> TopoDS_Shape:
     if (math.dist(a0, b0) + math.dist(a1, b1)
             > math.dist(a0, b1) + math.dist(a1, b0)):
         b0, b1 = b1, b0
+    order = (GeomAbs_Shape.GeomAbs_G1 if continuity == "G1"
+             else GeomAbs_Shape.GeomAbs_C0)
     fill = BRepOffsetAPI_MakeFilling()
-    fill.Add(occ.to_edge(edge_a), occ.to_face(face_a),
-             GeomAbs_Shape.GeomAbs_G1, True)
-    fill.Add(occ.to_edge(edge_b), occ.to_face(face_b),
-             GeomAbs_Shape.GeomAbs_G1, True)
+    fill.Add(occ.to_edge(edge_a), occ.to_face(face_a), order, True)
+    fill.Add(occ.to_edge(edge_b), occ.to_face(face_b), order, True)
     if math.dist(a0, b0) > 1e-9:
         fill.Add(occ.to_edge(make_line(a0, b0)),
                  GeomAbs_Shape.GeomAbs_C0, True)
     if math.dist(a1, b1) > 1e-9:
         fill.Add(occ.to_edge(make_line(a1, b1)),
                  GeomAbs_Shape.GeomAbs_C0, True)
-    fill.Build()
-    if not fill.IsDone():
+    try:
+        fill.Build()
+        done = fill.IsDone()
+    except Exception:                                    # noqa: BLE001
+        done = False                # OCCT raises rather than fails, at times
+    if not done:
         raise GeometryError("Blend failed between these edges")
     result = fill.Shape()
     if result.IsNull():
         raise GeometryError("Blend produced no surface")
     return result
+
+
+def _edge_samples(edge, n: int):
+    """n points along the edge, evenly by arc length, with unit tangents."""
+    import numpy as np
+    from OCP.GCPnts import GCPnts_UniformAbscissa
+    from OCP.gp import gp_Pnt, gp_Vec
+    ad = occ.edge_adaptor(occ.to_edge(edge))
+    ua = GCPnts_UniformAbscissa(ad, n)
+    params = ([ua.Parameter(i + 1) for i in range(ua.NbPoints())]
+              if ua.IsDone() and ua.NbPoints() >= 2 else
+              list(np.linspace(ad.FirstParameter(), ad.LastParameter(), n)))
+    pts, tans = [], []
+    for t in params:
+        p, d = gp_Pnt(), gp_Vec()
+        ad.D1(t, p, d)
+        pts.append(np.array([p.X(), p.Y(), p.Z()]))
+        v = np.array([d.X(), d.Y(), d.Z()])
+        tans.append(v / (np.linalg.norm(v) or 1.0))
+    return pts, tans
+
+
+def _cross_boundary_dirs(face, pts, tans, towards):
+    """At each point on the face's edge, the unit direction that leaves
+    the face across that edge: normal x edge tangent, turned to face
+    `towards` (the matching point on the far edge)."""
+    import numpy as np
+    from OCP.BRep import BRep_Tool
+    from OCP.GeomLProp import GeomLProp_SLProps
+    from OCP.ShapeAnalysis import ShapeAnalysis_Surface
+    f = occ.to_face(face)
+    surf = BRep_Tool.Surface_s(f)
+    props = GeomLProp_SLProps(surf, 1, 1e-6)
+    finder = ShapeAnalysis_Surface(surf)
+    out = []
+    for p, t, q in zip(pts, tans, towards):
+        uv = finder.ValueOfUV(_pnt(tuple(map(float, p))), 1e-6)
+        props.SetParameters(uv.X(), uv.Y())
+        if props.IsNormalDefined():
+            nv = props.Normal()
+            n = np.array([nv.X(), nv.Y(), nv.Z()])
+        else:
+            n = np.array([0.0, 0.0, 1.0])
+        c = np.cross(n, t)
+        if np.linalg.norm(c) < 1e-9:
+            c = q - p
+        c = c / (np.linalg.norm(c) or 1.0)
+        if np.dot(c, q - p) < 0:
+            c = -c
+        out.append(c)
+    return out
+
+
+#: How many sections a blend is lofted through by default: enough to
+#: follow a fair edge closely, few enough that the control rows along
+#: the blend stay a hand's width apart and can be pulled on afterwards.
+BLEND_SECTIONS = 12
+
+
+def blend_between_edges(face_a, edge_a, face_b, edge_b, bulge: float = 1.0,
+                        continuity: str = "G1",
+                        sections: int = BLEND_SECTIONS) -> TopoDS_Shape:
+    """A blend surface across the gap, with a bulge you can set.
+
+    Rhino's BlendSrf, the adjustable part: a cubic section leaves each
+    edge in the direction its surface is heading (tangent, G1), and
+    `bulge` scales how far the two handles reach before the section
+    turns for the other edge — 1 is the even S-curve, less pulls it
+    taut, more makes it belly out. `continuity` "G0" drops the handles
+    and the sections run straight across. Built as a loft through
+    `sections` sections, so the surface leaves each edge as the sampled
+    points do — on a fair edge the difference is far below tolerance —
+    and the blend has `sections` + 2 rows of control points along the
+    edge (the interpolation adds one at each end): fewer to pull on by
+    hand, more to hug a wavy edge.
+    """
+    import math
+    import numpy as np
+    if bulge <= 0:
+        raise GeometryError("Bulge must be positive")
+    n = max(3, int(sections))
+    pa, ta = _edge_samples(edge_a, n)
+    pb, tb = _edge_samples(edge_b, n)
+    if (math.dist(pa[0], pb[0]) + math.dist(pa[-1], pb[-1])
+            > math.dist(pa[0], pb[-1]) + math.dist(pa[-1], pb[0])):
+        pb, tb = pb[::-1], [-t for t in tb[::-1]]
+    ca = _cross_boundary_dirs(face_a, pa, ta, pb)
+    cb = _cross_boundary_dirs(face_b, pb, tb, pa)
+    # Where the two edges meet — a V of a gap, the surfaces touching at
+    # one end — the sections there have no length. A run of those at
+    # either end collapses to a single point the loft closes on, the
+    # way a triangle's apex does; one in the middle means the edges
+    # cross, and there is no surface across that.
+    stations = list(zip(pa, pb, ca, cb))
+    touching = [np.linalg.norm(p3 - p0) < tol() for p0, p3, _, _ in stations]
+    if all(touching):
+        raise GeometryError("The two edges lie on each other — nothing "
+                            "to blend across")
+    first = touching.index(False)
+    last = len(touching) - 1 - touching[::-1].index(False)
+    if any(touching[first:last + 1]):
+        raise GeometryError("The two edges cross — pick edges that face "
+                            "each other")
+    ruled = continuity.upper() == "G0"
+    # Four rows of points along the gap — the ends of every section and
+    # its two handles — each interpolated along the edge at the same
+    # parameters, so the four curves share a knot vector and stack into
+    # one B-spline surface: cubic Bezier across (exactly the sections,
+    # tangent where they are tangent), and along, one row of control
+    # points per section plus the two the interpolation adds.
+    rows: list = [[], [], [], []]
+    for p0, p3, d0, d3 in stations:
+        gap = np.linalg.norm(p3 - p0)
+        if ruled:
+            q = (p0, p0 + (p3 - p0) / 3.0, p0 + (p3 - p0) * 2.0 / 3.0, p3)
+        else:
+            h = bulge * gap / 3.0
+            q = (p0, p0 + d0 * h, p3 + d3 * h, p3)
+        for row, point in zip(rows, q):
+            row.append(point)
+    params = list(np.linspace(0.0, 1.0, len(stations)))
+    try:
+        curves = [_interpolated_row(row, params) for row in rows]
+        surf = _surface_through_rows(curves)
+        mk = BRepBuilderAPI_MakeFace(surf, tol())
+        ok = mk.IsDone()
+    except Exception:                                      # noqa: BLE001
+        ok = False
+    if not ok:
+        raise GeometryError("Blend failed between these edges")
+    return mk.Face()
+
+
+def _interpolated_row(points, params):
+    """A cubic B-spline through `points` at the given parameters."""
+    from OCP.GeomAPI import GeomAPI_Interpolate
+    from OCP.TColgp import TColgp_HArray1OfPnt
+    from OCP.TColStd import TColStd_HArray1OfReal
+    pts = TColgp_HArray1OfPnt(1, len(points))
+    for i, p in enumerate(points, 1):
+        pts.SetValue(i, gp_Pnt(*map(float, p)))
+    prm = TColStd_HArray1OfReal(1, len(points))
+    for i, t in enumerate(params, 1):
+        prm.SetValue(i, float(t))
+    it = GeomAPI_Interpolate(pts, prm, False, 1e-9)
+    it.Perform()
+    if not it.IsDone():
+        raise GeometryError("Could not run a curve along the edge")
+    return it.Curve()
+
+
+def _surface_through_rows(curves):
+    """The B-spline surface whose isocurves in one direction are these
+    curves (sharing a knot vector) and in the other a Bezier through
+    their poles: degree len(curves)-1 across."""
+    from OCP.Geom import Geom_BSplineSurface
+    from OCP.TColgp import TColgp_Array2OfPnt
+    from OCP.TColStd import TColStd_Array1OfInteger, TColStd_Array1OfReal
+    first = curves[0]
+    n = first.NbPoles()
+    if any(c.NbPoles() != n or c.NbKnots() != first.NbKnots()
+           for c in curves):
+        raise GeometryError("The rows do not line up")
+    m = len(curves)
+    poles = TColgp_Array2OfPnt(1, n, 1, m)
+    for j, c in enumerate(curves, 1):
+        for i in range(1, n + 1):
+            poles.SetValue(i, j, c.Pole(i))
+    uk = TColStd_Array1OfReal(1, first.NbKnots())
+    um = TColStd_Array1OfInteger(1, first.NbKnots())
+    for k in range(1, first.NbKnots() + 1):
+        uk.SetValue(k, first.Knot(k))
+        um.SetValue(k, first.Multiplicity(k))
+    vk = TColStd_Array1OfReal(1, 2)
+    vk.SetValue(1, 0.0)
+    vk.SetValue(2, 1.0)
+    vm = TColStd_Array1OfInteger(1, 2)
+    vm.SetValue(1, m)
+    vm.SetValue(2, m)
+    return Geom_BSplineSurface(poles, uk, vk, um, vm, first.Degree(), m - 1)
+
+
+def blend_surfaces_somehow(face_a, edge_a, face_b, edge_b):
+    """The best surface that will build across the gap, and what it is.
+
+    A G1 blend first. Edges that will not take one — too far apart, too
+    twisted, too unlike in length — used to be an error and no surface,
+    which from the viewport looked like the command doing nothing. Now
+    it steps down: a surface that only meets the edges (G0), then a
+    ruled surface straight between them. Returns (shape, how), where
+    how is "G1" or a sentence saying what was made instead.
+    """
+    try:
+        return blend_surfaces(face_a, edge_a, face_b, edge_b, "G1"), "G1"
+    except GeometryError:
+        pass
+    try:
+        return (blend_surfaces(face_a, edge_a, face_b, edge_b, "G0"),
+                "the edges would not take a tangent blend, so this one "
+                "only meets them (G0)")
+    except GeometryError:
+        pass
+    try:
+        return (loft([edge_a, edge_b], ruled=True),
+                "the edges would not take a blend, so this is a ruled "
+                "surface straight between them")
+    except GeometryError as exc:
+        raise GeometryError("No surface will build between these two "
+                            "edges — try edges that face each other") from exc
