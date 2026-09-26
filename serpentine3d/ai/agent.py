@@ -38,12 +38,7 @@ fillets, arrays, osnaps, display modes — use run_command with the command \
 reference below.
 - Build compound shapes from profiles: draw curves, then extrude/revolve/\
 loft/sweep, then boolean.
-- After building something non-trivial, call screenshot and LOOK at it. \
-If it is wrong, fix it before answering. Ask for an informative view in \
-the screenshot itself (view="perspective", zoom_extents=true is a good \
-default): that renders through your own camera and leaves the user's \
-viewport alone. Only use the viewport tool when the user asks to change \
-their view.
+{screenshot_advice}
 - Keep object names meaningful (name= parameters) so later edits are easy.
 - Everything you do is undoable; when the user asks to remove your work, \
 prefer undo.
@@ -62,21 +57,29 @@ claiming that the requested geometry was created.
 """
 
 
+#: The bullet about looking at the work — for a model that can see. A
+#: text-only model gets told to verify with scene_info and measure instead.
+_SCREENSHOT_ADVICE = (
+    "- After building something non-trivial, call screenshot and LOOK at it. "
+    "If it is wrong, fix it before answering. Ask for an informative view in "
+    "the screenshot itself (view=\"perspective\", zoom_extents=true is a good "
+    "default): that renders through your own camera and leaves the user's "
+    "viewport alone. Only use the viewport tool when the user asks to change "
+    "their view.")
+_TEXT_ONLY_ADVICE = (
+    "- This model is text-only and cannot inspect screenshots. Verify work "
+    "with scene_info and measure; do not claim to have seen the viewport.")
+
+
 def build_system_prompt(vision: bool = True) -> str:
     from ..commands.base import _REGISTRY
     lines = []
     for cd in sorted(_REGISTRY.values(), key=lambda c: c.name):
         alias = f" ({', '.join(cd.aliases)})" if cd.aliases else ""
         lines.append(f"  {cd.name}{alias} — {cd.label}")
-    prompt = _SYSTEM.format(command_reference="\n".join(lines))
-    if not vision:
-        prompt = prompt.replace(
-            "- After building something non-trivial, call screenshot and LOOK at it. "
-            "If it is wrong, fix it before answering. Set an informative view first "
-            "(viewport tool: perspective + zoom_extents is a good default).",
-            "- This model is text-only and cannot inspect screenshots. Verify work "
-            "with scene_info and measure; do not claim to have seen the viewport.")
-    return prompt
+    return _SYSTEM.format(
+        command_reference="\n".join(lines),
+        screenshot_advice=_SCREENSHOT_ADVICE if vision else _TEXT_ONLY_ADVICE)
 
 
 class Agent(QObject):
