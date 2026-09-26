@@ -2710,7 +2710,7 @@ def _lift_degree_for_rows(bs, direction: str) -> list[str]:
     move — and it is what makes the new rows bend: a loft between two
     curves is degree 1 between them, and rows put into a degree-1
     surface are corners, however you drag them. Degree 2 bends already
-    and is left alone. Returns the directions lifted."""
+    and is left alone."""
     want = direction.lower()
     lifted = []
     u_deg = bs.UDegree()
@@ -2723,7 +2723,6 @@ def _lift_degree_for_rows(bs, direction: str) -> list[str]:
         lifted.append("V")
     if lifted:
         bs.IncreaseDegree(u_deg, v_deg)
-    return lifted
 
 
 def surface_degrees(shape) -> tuple[int, int]:
@@ -2774,6 +2773,50 @@ def change_curve_degree(shape, degree: int) -> TopoDS_Shape:
     return _curve_from_splines(splines)
 
 
+def _flat_knots(bs, which: str) -> list[float]:
+    """The flat knot sequence of a B-spline surface in one direction."""
+    from OCP.TColStd import TColStd_Array1OfReal
+    if which == "u":
+        flat = TColStd_Array1OfReal(1, bs.NbUPoles() + bs.UDegree() + 1)
+        bs.UKnotSequence(flat)
+    else:
+        flat = TColStd_Array1OfReal(1, bs.NbVPoles() + bs.VDegree() + 1)
+        bs.VKnotSequence(flat)
+    return [flat.Value(i) for i in range(flat.Lower(), flat.Upper() + 1)]
+
+
+def _knot_for_greville(flat: list[float], degree: int, g: float) -> float:
+    """The knot to insert so that a new control point acts at `g`.
+
+    A knot at the picked parameter is not a control point there: a
+    pole acts at its Greville abscissa, the mean of the `degree` knots
+    after it, so a knot put at u lands the new row of handles somewhere
+    to one side of the line that was picked. Rhino's InsertControlPoint
+    does what this does — put the knot where the handle will be at u.
+
+    The new pole's abscissa is (t + the degree-1 knots beside t) / degree,
+    so for each window of degree-1 consecutive knots the t that lands at
+    g follows, and the one that actually sits beside its window is it.
+    When none does (g within a degree-1 window of an end), the knot goes
+    at g itself, which is as close as a handle there can get.
+    """
+    if degree < 2:
+        return g
+    w = degree - 1
+    eps = max(abs(flat[-1] - flat[0]), 1.0) * 1e-6
+    best = None
+    for j in range(len(flat) - w + 1):
+        window = flat[j:j + w]
+        t = degree * g - sum(window)
+        lo = flat[j - 1] if j > 0 else float("-inf")
+        hi = flat[j + w] if j + w < len(flat) else float("inf")
+        if lo <= t <= hi and flat[0] + eps < t < flat[-1] - eps:
+            score = abs(t - g)
+            if best is None or score < best[0]:
+                best = (score, t)
+    return best[1] if best is not None else g
+
+
 def insert_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
     """A copy of the surface with a knot row added through `point`.
 
@@ -2799,12 +2842,16 @@ def insert_surface_knot(shape, point, direction: str = "u") -> TopoDS_Shape:
             if min(abs(u - u0), abs(u - u1)) < eps_u:
                 raise GeometryError("That is the edge of the surface — pick "
                                     "a point on it")
-            bs.InsertUKnot(u, 1, tol() * 0.01)
+            bs.InsertUKnot(_knot_for_greville(_flat_knots(bs, "u"),
+                                              bs.UDegree(), u),
+                           1, tol() * 0.01)
         if want in ("v", "both"):
             if min(abs(v - v0), abs(v - v1)) < eps_v:
                 raise GeometryError("That is the edge of the surface — pick "
                                     "a point on it")
-            bs.InsertVKnot(v, 1, tol() * 0.01)
+            bs.InsertVKnot(_knot_for_greville(_flat_knots(bs, "v"),
+                                              bs.VDegree(), v),
+                           1, tol() * 0.01)
     except GeometryError:
         raise
     except Exception as exc:                                   # noqa: BLE001
@@ -2831,16 +2878,39 @@ def insert_surface_knots_at_spans(shape) -> TopoDS_Shape:
     return mk.Face()
 
 
-def surface_iso_lines_at(shape, point, direction: str = "u") -> list:
-    """The isocurve(s) a knot row inserted at `point` would follow, as
-    polylines to ghost: for "u" the V isocurve through the point, for
-    "v" the U isocurve, for "both" the pair."""
+def new_control_rows_at(shape, point, direction: str = "u") -> list:
+    """The row(s) of control points insert_surface_knot would add through
+    `point`, as polylines to ghost — the handles themselves, not the line
+    on the surface they act on, so what is shown is what appears.
+
+    Every row that is new is shown, not only the one asked for: a row put
+    into a degree-1 direction lifts it to degree 3 first, and that is two
+    more rows, which had better be on screen before the click.
+    """
+    import numpy as np
+    new = insert_surface_knot(shape, point, direction)
+    pts, (nu, nv) = surface_control_points(new)
+    grid = np.asarray(pts, float).reshape(nu, nv, 3)
+    old_pts, (ou, ov) = surface_control_points(shape)
+    old = np.asarray(old_pts, float).reshape(ou, ov, 3)
+    (lo, hi) = bbox(shape)
+    eps = max(float(np.linalg.norm(np.subtract(hi, lo))), 1.0) * 1e-6
+
+    def unchanged(line, olds):
+        return any(len(o) == len(line)
+                   and float(np.abs(o - line).max()) < eps for o in olds)
+
     out = []
-    if direction.lower() in ("u", "both"):
-        out.append(iso_curve(shape, point, along="v"))
-    if direction.lower() in ("v", "both"):
-        out.append(iso_curve(shape, point, along="u"))
-    return out
+    want = direction.lower()
+    if want in ("u", "both") and nu > 1:
+        olds = [old[i] for i in range(ou)]
+        out += [grid[i] for i in range(nu) if not unchanged(grid[i], olds)]
+    if want in ("v", "both") and nv > 1:
+        olds = [old[:, j] for j in range(ov)]
+        out += [grid[:, j] for j in range(nv)
+                if not unchanged(grid[:, j], olds)]
+    return [make_polyline([tuple(p) for p in line]) for line in out
+            if len(line) > 1]
 
 
 def _remove_surface_knot_at(bs, which: str, param: float):
@@ -2921,20 +2991,20 @@ def delete_surface_control_rows(shape, flat_indices: list[int]):
     else:
         raise GeometryError("Hold points along one row or one column of "
                             "the surface — these run both ways")
-    from OCP.TColStd import TColStd_Array1OfReal
     if which == "u":
-        flat = TColStd_Array1OfReal(1, bs.NbUPoles() + bs.UDegree() + 1)
-        bs.UKnotSequence(flat)
-        deg = bs.UDegree()
+        deg, count = bs.UDegree(), nu
         targets = sorted(us, reverse=True)
     else:
-        flat = TColStd_Array1OfReal(1, bs.NbVPoles() + bs.VDegree() + 1)
-        bs.VKnotSequence(flat)
-        deg = bs.VDegree()
+        deg, count = bs.VDegree(), nv
         targets = sorted(vs, reverse=True)
-    seq = [flat.Value(k) for k in range(1, flat.Length() + 1)]
-    # highest index first: each removal renumbers the poles after it
+    if 0 in targets or count - 1 in targets:
+        raise GeometryError("The row on the edge of the surface cannot "
+                            "come off — it is the edge; take out the one "
+                            "beside it, or Trim")
+    # highest index first: each removal renumbers the poles after it,
+    # and reshapes the knots, so where each row acts is read afresh
     for idx in targets:
+        seq = _flat_knots(bs, which)
         _remove_surface_knot_at(bs, which, _greville(seq, deg, idx))
     mk = BRepBuilderAPI_MakeFace(bs, tol())
     if not mk.IsDone():

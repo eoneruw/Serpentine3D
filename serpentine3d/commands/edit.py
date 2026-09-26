@@ -476,8 +476,11 @@ def cmd_insertknot(ctx):
             return None
         try:
             if o.kind == "surface":
+                # the row of handles that will appear, where it will
+                # appear — not the line on the surface it acts on, which
+                # is to one side of the handles on any curved surface
                 return g.make_compound(
-                    g.surface_iso_lines_at(o.shape, p, direction))
+                    g.new_control_rows_at(o.shape, p, direction))
             out = g.insert_knot(o.shape, p)
             return g.make_polyline(g.get_control_points(out),
                                    closed=g.is_closed_curve(out))
@@ -549,9 +552,11 @@ def _say_if_lifted(ctx, o, was, shape):
     now = g.surface_degrees(shape)
     if now != was:
         which = " and ".join(d for d, a, b in zip("UV", was, now) if a != b)
+        extra = sum(b - a for a, b in zip(was, now))
         ctx.echo(f"{o.name}: raised to degree {g.SMOOTH_DEGREE} in {which} "
-                 "so the new rows bend rather than fold (the surface did "
-                 "not move).")
+                 f"so the new rows bend rather than fold — that is {extra} "
+                 f"row{'s' if extra != 1 else ''} of its own, once, on top "
+                 "of the one you asked for (the surface did not move).")
 
 
 @command("changedegree")

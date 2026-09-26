@@ -64,13 +64,6 @@ def test_the_edge_of_the_surface_is_refused_plainly():
         g.insert_surface_knot(_panel(), (0, 0, 0), "u")
 
 
-def test_the_ghost_is_the_line_the_row_will_follow():
-    srf = _panel()
-    lines = g.surface_iso_lines_at(srf, (50, 20, 40), "both")
-    assert len(lines) == 2 and all(g.shape_kind(c) == "curve" for c in lines)
-    assert len(g.surface_iso_lines_at(srf, (50, 20, 40), "u")) == 1
-
-
 @pytest.fixture
 def win(tmp_path, monkeypatch):
     monkeypatch.setenv("SERP3D_CONFIG", str(tmp_path / "settings.json"))

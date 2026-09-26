@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- **InsertKnot's new row lands where you pointed.** The knot went in at
+  the picked spot, but a knot at u is not a control point at u — a handle
+  acts at the mean of the knots beside it — so on a curved surface the new
+  row of handles came up well to one side of the yellow line. The knot is
+  now placed so the handle lands under the cursor (Rhino's
+  InsertControlPoint), and the ghost is the row of handles that will
+  appear rather than the line on the surface.
 - **Explode takes a mesh apart.** It raised (`'MeshShape' object has no
   attribute 'ShapeType'`) and cancelled. A mesh comes apart into its
   connected pieces now — a scan of many parts saved as one mesh
