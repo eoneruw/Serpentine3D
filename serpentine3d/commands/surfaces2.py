@@ -602,7 +602,7 @@ def cmd_blendsrf(ctx):
         shape, how = g.blend_surfaces_somehow(fa, ea, fb, eb)
         if how == "G1":
             how = ""
-    obj = ctx.scene.add(shape, layer_id=oa.layer_id)
+    obj = ctx.scene.add_from(shape, oa)
     ctx.select_result([obj])
     if how:
         ctx.echo(f"Created blend {obj.name} between {oa.name} and "
