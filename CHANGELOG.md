@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **To Surfaces (`meshtobrep`) no longer beach-balls on a scan.** It makes
+  a B-rep face per triangle, so a scanned panel of a few hundred thousand
+  triangles meant minutes of frozen UI for a solid nothing can edit. Above
+  5,000 triangles it now asks first; above 50,000 it refuses and says to
+  fit a surface to the scan instead.
 - **InsertKnot's new row lands where you pointed.** The knot went in at
   the picked spot, but a knot at u is not a control point at u — a handle
   acts at the mean of the knots beside it — so on a curved surface the new
