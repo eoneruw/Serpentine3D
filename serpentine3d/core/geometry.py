@@ -2913,29 +2913,6 @@ def new_control_rows_at(shape, point, direction: str = "u") -> list:
             if len(line) > 1]
 
 
-def new_control_rows_at(shape, point, direction: str = "u") -> list:
-    """The row(s) of control points insert_surface_knot would add through
-    `point`, as polylines to ghost — the handles themselves, not the line
-    on the surface they act on, so what is shown is what appears."""
-    import numpy as np
-    new = insert_surface_knot(shape, point, direction)
-    pts, (nu, nv) = surface_control_points(new)
-    grid = np.asarray(pts, float).reshape(nu, nv, 3)
-    target = np.asarray(point, float)
-    out = []
-    want = direction.lower()
-    if want in ("u", "both") and nu > 1:
-        rows = [grid[i] for i in range(nu)]
-        out.append(min(rows, key=lambda r: np.linalg.norm(
-            r - target, axis=1).min()))
-    if want in ("v", "both") and nv > 1:
-        cols = [grid[:, j] for j in range(nv)]
-        out.append(min(cols, key=lambda c: np.linalg.norm(
-            c - target, axis=1).min()))
-    return [make_polyline([tuple(p) for p in line]) for line in out
-            if len(line) > 1]
-
-
 def _remove_surface_knot_at(bs, which: str, param: float):
     """Take the interior knot nearest `param` out of the surface in one
     direction ("u" or "v"). The surface moves; the deviation is the
@@ -3424,12 +3401,6 @@ def curvature_at(shape, near_point: Point) -> dict:
         "curvature": k,
         "radius": (1.0 / k) if k > 1e-12 else float("inf"),
     }
-
-
-def _is_brep(shape) -> bool:
-    """Whether this is an OCCT shape at all — a mesh or a point cloud is
-    a shape of our own, with no topology to walk."""
-    return hasattr(shape, "ShapeType")
 
 
 def explode(shape) -> list:
