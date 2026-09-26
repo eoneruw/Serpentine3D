@@ -126,7 +126,9 @@ def test_the_blend_appears_at_once_and_a_typed_bulge_reshapes_it(win):
     win.processor.provide_text("2")
     assert win.processor.busy, "still open for another number"
     fat = g.bbox(win.scene.get(made[0].id).shape)
-    assert fat[1][2] > even[1][2] + 1, "more bulge, more belly"
+    # The bounds are exact now, not the control polygon's, so the belly
+    # is measured as it is: about 15% taller at bulge 2 on this gap.
+    assert fat[1][2] > even[1][2] * 1.1, "more bulge, more belly"
     win.processor.provide_text("0.3")
     taut = g.bbox(win.scene.get(made[0].id).shape)
     assert taut[1][2] < even[1][2]
@@ -222,7 +224,7 @@ def test_the_chips_reshape_the_blend_as_you_drag(win):
     proc.set_option("Bulge", "2")
     assert said.count("Bulge=2") == 1
     fat = g.bbox(win.scene.get(made.id).shape)[1][2]
-    assert fat > even + 1
+    assert fat > even * 1.1
     chips["Continuity"].click()
     assert proc.option("Continuity", "Tangent") == "Position"
     lo, hi = g.bbox(win.scene.get(made.id).shape)
