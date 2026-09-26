@@ -935,9 +935,9 @@ def cmd_meshquality(ctx):
         cfg = getattr(win, "cfg", None)
         if cfg is not None:
             cfg.set("display", "mesh_quality", name)
-        panel = getattr(win, "display_panel", None)
-        if panel is not None:
-            panel.refresh()
+        dialog = getattr(win, "_display_settings", None)
+        if dialog is not None:             # the settings window, if open
+            dialog.panel.refresh()
     vp = ctx.viewport
     if vp is not None and hasattr(vp, "recut_in_background"):
         vp.recut_in_background()        # the old meshes stay up meanwhile
