@@ -16,8 +16,18 @@ _SECTIONS = {
 
 
 def _doc_of(cd) -> str:
+    """The first sentence of a command's docstring — whole, however the
+    lines were wrapped — or its label when it has none. The first line
+    alone cut "Rotate around an axis picked as two points: type an" off
+    mid-thought in the help and the command table."""
+    import re
     doc = (cd.fn.__doc__ or "").strip()
-    return doc.splitlines()[0] if doc else cd.label
+    if not doc:
+        return cd.label
+    first = doc.split("\n\n", 1)[0]
+    text = " ".join(line.strip() for line in first.splitlines())
+    m = re.search(r"[.!?](?=\s|$)", text)
+    return text[:m.end()] if m else text
 
 
 def _section_of(cd) -> str:
