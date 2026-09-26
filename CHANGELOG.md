@@ -32,13 +32,6 @@
   triangles meant minutes of frozen UI for a solid nothing can edit. Above
   5,000 triangles it now asks first; above 50,000 it refuses and says to
   fit a surface to the scan instead.
-- **InsertKnot's new row lands where you pointed.** The knot went in at
-  the picked spot, but a knot at u is not a control point at u — a handle
-  acts at the mean of the knots beside it — so on a curved surface the new
-  row of handles came up well to one side of the yellow line. The knot is
-  now placed so the handle lands under the cursor (Rhino's
-  InsertControlPoint), and the ghost is the row of handles that will
-  appear rather than the line on the surface.
 - **Explode takes a mesh apart.** It raised (`'MeshShape' object has no
   attribute 'ShapeType'`) and cancelled. A mesh comes apart into its
   connected pieces now — a scan of many parts saved as one mesh
@@ -72,7 +65,6 @@
   counted the same way, is refused with a plain sentence until a set can
   be turned as one. And the gumball, which had nothing to offer several
   faces held with edges, gives them three arrows that move them as one.
-
 - **An ellipse in a DXF arrives as that ellipse (#28).** Reported as an
   ellipse exported from Rhino not being one any more, with the tell that
   Serpentine's own DXF re-imported fine. That asymmetry was the clue: the
@@ -86,7 +78,6 @@
   shape in its weights and its parameterisation in its knots, and both were
   dropped for an invented uniform knot vector, which left an exact ellipse
   missing itself by half a unit in ten. All four are now read as written.
-
 - **A cutting curve that reaches a curve splits it (#32).** The sibling of
   #22, which was the same complaint about surfaces: a cutter only split the
   curve if it overran it, so the only way through was to draw it longer.
@@ -98,7 +89,6 @@
   first, exactly as it already was for a surface, so `split` and `trim`
   treat a curve and a surface the same way. A gap you can see is still a
   gap and still refuses.
-
 - **The transform commands reach what you are holding (#29).** Sub-objects
   could only be transformed with the gumball. `move`, `rotate` and `scale`
   asked only about held control points, so a held face, solid edge or curve
@@ -111,7 +101,6 @@
   stays held, rather than doing something else to the object behind it. The
   same helper serves `scalenu`, `mirror`, `rotate3d`, `setpt` and
   `projecttocplane`, which refuse clearly for now.
-
 - **Imported solids are no longer inside out (#26).** Properties showed things
   like `Volume: -0.041 mm³` on objects from Rhino files. A negative volume is
   what OpenCascade reports for a solid whose faces all point inward, and
@@ -160,11 +149,6 @@
   a degree-1 direction to 3 first (exactly: the surface does not
   move) and says so; `changedegree` does the same by hand, on curves
   and surfaces, U, V or both.
-
-## Unreleased
-
-### Added
-
 - **`weight` pulls a curve or surface toward its control points.**
   Rhino's Weight: hold one or more control points, run it, and drag
   the Weight chip — above 1 the shape tightens in toward the point,
@@ -177,7 +161,9 @@
   tracebacks — to `logs/` beside a source checkout or the user data
   directory; `latest.log` points at the newest and the last ten are
   kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
-  now comes with the traceback that did it.
+  now comes with the traceback that did it, and a beach ball with
+  every thread's stack: the log dumps them when the event loop stops
+  turning for four seconds.
 - **A row of control points comes off a surface.** `removeknot` takes
   surfaces now, with a Direction (U row, V column, Both) and the
   surface ghosted as it will be; and Delete on held surface control
@@ -203,22 +189,12 @@
   carries a chip of its own: drag it and the number runs into the
   input line with the gold ghost following; Enter takes it. Nothing
   per command, so it is there for all of them.
-- **A rolling run log.** Every launch writes a log of itself — machine
-  and driver, files opened, every command-line echo, what was selected
-  when, mouse buttons and keys in the viewport, Qt warnings and Python
-  tracebacks — to `logs/` beside a source checkout or the user data
-  directory; `latest.log` points at the newest and the last ten are
-  kept. Help → Open Log Folder / Copy Log Path. "The screen went dark"
-  now comes with the traceback that did it, and a beach ball with
-  every thread's stack: the log dumps them when the event loop stops
-  turning for four seconds.
 - **Right-click a layer to move the selection onto it (#27).** With
   objects selected, the Layers panel's right-click menu offers to put them
   on the layer under the pointer. The entry says what it will do, "Move 3
   objects to Walls", counting only the ones not already there; it is
   always present so it can be found, and greyed when there is nothing it
   could do. One undo step, and the selection is left as it was.
-
 - **Ctrl+Shift and a band hold faces, edges and segments (#30).** The
   chord that clicks one part at a time now sweeps them up by the band-full:
   a row of edges, or the segments down one side of a drawing, in a single
@@ -229,7 +205,6 @@
   neither end inside it, and a band dropped in the middle of a big face has
   no corner inside it at all, and both count. Like the click, it adds to
   what is held, takes no objects, and finds no faces in a wireframe view.
-
 - **Open Mica spatial session records.** Mica `.serp` files now open as coloured
   point clouds with camera routes. Untracked poses break the route, uncertain
   spans appear as orange dashed segments, and save/reopen does not duplicate the
