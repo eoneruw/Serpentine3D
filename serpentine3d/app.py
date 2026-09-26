@@ -1683,11 +1683,24 @@ class MainWindow(QMainWindow):
     # actually read/write (GitHub #2), and so Open stops offering export-only
     # formats.
 
+    def _leave_the_command_behind(self):
+        """A command waiting on the old drawing has nothing to wait for
+        in the new one. Extrude was left asking for curves while a file
+        opened underneath it, and the next click on the canvas went to
+        that question instead of picking anything, with nothing on
+        screen to say why. The selection and any control points shown
+        go with it: they named objects that are about to not exist."""
+        if self.processor.busy:
+            self.processor.cancel()
+        self.selection.clear()
+        self.scene.cv_enabled.clear()
+
     def _file_new(self):
         if self.scene.all():
             ret = QMessageBox.question(self, "New", "Clear the scene?")
             if ret != QMessageBox.StandardButton.Yes:
                 return
+        self._leave_the_command_behind()
         self.history.checkpoint("new")
         self.scene.clear()
         self.ctx.current_path = None
@@ -1697,6 +1710,7 @@ class MainWindow(QMainWindow):
     def start_new(self, units: str = "mm"):
         """Fresh document in the given units (no confirm) — used by the
         welcome screen."""
+        self._leave_the_command_behind()
         self.history.checkpoint("new")
         self.scene.clear()
         self.scene.units = units
@@ -1811,6 +1825,7 @@ class MainWindow(QMainWindow):
         welcome screen)."""
         _log.note("file", f"open {path}")
         try:
+            self._leave_the_command_behind()
             self.history.checkpoint("open")
             self._import_showing_progress(path)
             if self.journal is not None:
