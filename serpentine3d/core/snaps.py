@@ -44,8 +44,11 @@ def _static_snap_points(shape) -> list[tuple[tuple, str]]:
     if isinstance(shape, PointCloudShape):
         return []
     from .mesh import MeshShape
-    if isinstance(shape, MeshShape):
+    from .picture import PictureShape
+    if isinstance(shape, MeshShape) and not isinstance(shape, PictureShape):
         # A mesh is not a BRep and has no edges or centres to speak of.
+        # (A picture is a mesh underneath, but a rectangle with corners
+        # and a centre worth snapping to; it is handled below.)
         # Asking it the BRep questions raised on every mouse move and
         # took picking and drawing down with it whenever a scan was open.
         # Its vertices are a snap of their own kind, Vertex, as in Rhino,
@@ -66,7 +69,6 @@ def _static_snap_points(shape) -> list[tuple[tuple, str]]:
             seen.add(key)
             out.append(((x, y, z), kind))
 
-    from .picture import PictureShape
     if isinstance(shape, PictureShape):
         for a, b in shape.feature_edges().reshape(-1, 2, 3):
             add(*a, "end")
