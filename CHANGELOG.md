@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **Ctrl+Shift-click picks edges and faces on a Mac.** Qt hands the Mac's
+  Control key over as Meta and turns Ctrl+click into a right click, so
+  doing what the docs say sent a right click with Meta+Shift — an Enter,
+  and nothing picked. Meta now counts as Ctrl for sub-object picks and
+  for holding control points, and the fabricated right click carries the
+  pick when Shift is down. ⌘+Shift works as it always did.
 - **A surface made from a painted surface is painted the same.** Offset,
   blend, extract, explode, split, trim and boolean split carried the
   layer across but not the colour or material, so a red car-paint

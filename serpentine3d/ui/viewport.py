@@ -26,6 +26,7 @@ from ..utils import units as _units
 from ..utils.glsetup import set_default_gl_format  # noqa: F401
 from ..utils.math3d import (normalize, ray_line_parameter, ray_plane, ray_plane_any, ray_triangle_hits)
 from . import gpu_share, theme
+from .gumball import CTRL_KEYS as _CTRL_KEYS
 from .camera import (
     STANDARD_VIEWS,
     Camera,
@@ -103,6 +104,20 @@ def describe_input(ev, what: str) -> str:
     pos = ev.position()
     return (f"{what} {chord + '+' if chord else ''}{button} "
             f"at {pos.x():.0f},{pos.y():.0f}")
+#: Ctrl, as either key a Mac has for it — see gumball.CTRL_KEYS.
+CTRL_KEYS = _CTRL_KEYS
+
+
+def subobject_chord(modifiers) -> bool:
+    """Is this the Ctrl+Shift that picks an edge or a face?
+
+    On a Mac Qt hands the Command key over as Control and the key marked
+    Control as Meta, so someone reading "Ctrl+Shift-click" and doing
+    exactly that was sending Meta+Shift, which picked nothing. Either
+    key counts: the chord is the same chord on every keyboard.
+    """
+    return bool(modifiers & CTRL_KEYS) and bool(
+        modifiers & Qt.KeyboardModifier.ShiftModifier)
 
 
 def cv_marker_size(points, eye, width, height, half_px):
@@ -4574,7 +4589,7 @@ class Viewport(QOpenGLWidget):
                         return
                 # Ctrl stands an axis up from the CPlane rather than taking
                 # the point: this click says where, the height comes after.
-                if (ev.modifiers() & Qt.KeyboardModifier.ControlModifier
+                if (ev.modifiers() & CTRL_KEYS
                         and self.space == "model"
                         and self._locked_axis() is None
                         and self.lock_elevation(pos.x(), pos.y())):
@@ -4600,8 +4615,7 @@ class Viewport(QOpenGLWidget):
                     self._begin_hold(pos, ev.modifiers())
                     return
                 add = bool(ev.modifiers() & (
-                    Qt.KeyboardModifier.ShiftModifier
-                    | Qt.KeyboardModifier.ControlModifier))
+                    Qt.KeyboardModifier.ShiftModifier | CTRL_KEYS))
                 if self.layout_view.press(pos.x(), pos.y(), add=add):
                     self.layoutSelectionChanged.emit()
                     self.update()
@@ -4675,8 +4689,7 @@ class Viewport(QOpenGLWidget):
                 self._last_mouse = pos
                 return
             shift = bool(ev.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-            ctrl = bool(ev.modifiers()
-                        & Qt.KeyboardModifier.ControlModifier)
+            ctrl = bool(ev.modifiers() & CTRL_KEYS)
             action = drag_action(self.camera.projection, shift, ctrl)
             if action == "pan":
                 self.camera.pan(dx, dy, self.height())
@@ -4902,7 +4915,7 @@ class Viewport(QOpenGLWidget):
         mods = ev.modifiers()
         command = _cfg.chord_command(chords, _cfg.chord_key(
             button,
-            ctrl=bool(mods & Qt.KeyboardModifier.ControlModifier),
+            ctrl=bool(mods & CTRL_KEYS),
             shift=bool(mods & Qt.KeyboardModifier.ShiftModifier),
             alt=bool(mods & Qt.KeyboardModifier.AltModifier)))
         if not command:
@@ -4922,6 +4935,13 @@ class Viewport(QOpenGLWidget):
             if press is not None and \
                     (pos - press).manhattanLength() <= 4:
                 # a click, not an orbit/pan drag
+                if (subobject_chord(ev.modifiers()) and self.space == "model"
+                        and not self.point_mode):
+                    # macOS turns Ctrl+click into a right click before
+                    # it reaches us; Ctrl+Shift-click on an edge is still
+                    # a pick, not an Enter
+                    self._toggle_subobject_at(pos)
+                    return
                 if self._fire_chord(ev):
                     return
                 self.enterShortcut.emit()      # Rhino-style Enter
@@ -5090,6 +5110,13 @@ class Viewport(QOpenGLWidget):
             gb.end_drag()
         self.update()
 
+    def _toggle_subobject_at(self, pos):
+        """Ctrl+Shift-click: the edge or face under the cursor, in or out."""
+        hit = self.pick_subobject(pos.x(), pos.y())
+        if hit is not None:
+            self.selection.toggle_subobject(*hit)
+            self.update()
+
     def _finish_pick(self, ev):
         """What a left release does to the selection, band or single click.
 
@@ -5115,13 +5142,8 @@ class Viewport(QOpenGLWidget):
             if self.point_mode:
                 self._log_pick("a point for the running command")
                 return
-            mods = ev.modifiers()
-            if (mods & Qt.KeyboardModifier.ControlModifier
-                    and mods & Qt.KeyboardModifier.ShiftModifier):
-                hit = self.pick_subobject(pos.x(), pos.y())
-                if hit is not None:
-                    self.selection.toggle_subobject(*hit)
-                    self.update()
+            if subobject_chord(ev.modifiers()):
+                self._toggle_subobject_at(pos)
                 return
             picked = self.pick_object(pos.x(), pos.y())
             self._log_pick(f"object {picked}" if picked else "nothing")
@@ -5191,8 +5213,7 @@ class Viewport(QOpenGLWidget):
         if hits:
             self._pick_boxed_cvs(hits, modifiers)
             return None
-        if (modifiers & Qt.KeyboardModifier.ControlModifier
-                and modifiers & Qt.KeyboardModifier.ShiftModifier):
+        if subobject_chord(modifiers):
             # the chord that clicks one face, edge or segment sweeps them
             # up by the band-full, adding to what is held (issue #30). It
             # is asking for parts, so it never falls through to objects.
@@ -5238,7 +5259,7 @@ class Viewport(QOpenGLWidget):
         """
         sel = self.selection
         caught = [(obj_id, "cv", i) for obj_id, i in hits]
-        if modifiers & Qt.KeyboardModifier.ControlModifier:
+        if modifiers & CTRL_KEYS:
             drop = set(caught)
             sel.set_subobjects([e for e in sel.subobjects if e not in drop])
             return
@@ -5485,8 +5506,7 @@ class Viewport(QOpenGLWidget):
         """
         sel = self.selection
         entry = (obj_id, "cv", index)
-        if modifiers & (Qt.KeyboardModifier.ShiftModifier
-                        | Qt.KeyboardModifier.ControlModifier):
+        if modifiers & (Qt.KeyboardModifier.ShiftModifier | CTRL_KEYS):
             sel.toggle_subobject(*entry)
             return entry in sel.subobjects
         if entry in sel.subobjects and not sel.ids:
@@ -5552,7 +5572,7 @@ class Viewport(QOpenGLWidget):
         mods = QApplication.queryKeyboardModifiers()
         if mods & Qt.KeyboardModifier.ShiftModifier:
             step *= 10.0
-        if mods & Qt.KeyboardModifier.ControlModifier:
+        if mods & CTRL_KEYS:
             step *= 0.1
         vec = (self.cplane.xdir * direction[0]
                + self.cplane.ydir * direction[1]
