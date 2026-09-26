@@ -17,6 +17,20 @@ def _back_at_the_start(p, pts) -> bool:
     return all(abs(a - b) < 1e-7 for a, b in zip(p, pts[0]))
 
 
+def _same_as_the_last(ctx, p, pts) -> bool:
+    """A pick landing where the previous one did — the same snap taken
+    twice, or a double-click — is not a new point. Rhino drops it; the
+    interpolator does not: two coincident points and it fails outright,
+    with a Standard_ConstructionError for a message and the whole curve
+    gone. Say so and carry on."""
+    if not isinstance(p, (tuple, list)) or not pts:
+        return False
+    if all(abs(a - b) < 1e-7 for a, b in zip(p, pts[-1])):
+        ctx.echo("Same point as the last one — pick the next point.")
+        return True
+    return False
+
+
 def _rubber(pts):
     """Preview segments through a point list."""
     if len(pts) < 2:
@@ -66,6 +80,8 @@ def cmd_polyline(ctx):
             obj = ctx.add(g.make_polyline(pts, closed=True))
             ctx.echo(f"Created closed {obj.name}.")
             return
+        if _same_as_the_last(ctx, p, pts):
+            continue
         pts.append(p)
     obj = ctx.add(g.make_polyline(pts))
     ctx.echo(f"Created {obj.name} with {len(pts)} points.")
@@ -125,6 +141,8 @@ def cmd_curve(ctx):
                                                closed=True))
             ctx.echo(f"Created closed {obj.name}.")
             return
+        if _same_as_the_last(ctx, p, pts):
+            continue
         pts.append(p)
     obj = ctx.add(g.make_control_curve(pts, degree=degree))
     ctx.echo(f"Created {obj.name} from {len(pts)} control points.")
@@ -150,6 +168,8 @@ def cmd_interpcrv(ctx):
             obj = ctx.add(g.make_interp_curve(pts, closed=True))
             ctx.echo(f"Created closed {obj.name}.")
             return
+        if _same_as_the_last(ctx, p, pts):
+            continue
         pts.append(p)
     obj = ctx.add(g.make_interp_curve(pts))
     ctx.echo(f"Created {obj.name} through {len(pts)} points.")
