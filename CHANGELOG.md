@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **A held edge on a plain surface no longer turns the gumball into a
+  fillet handle.** The handle asked OCCT to fillet a border edge — one
+  face, nothing to round between — and OCCT raised from inside the
+  mouse handler on every pixel of the drag. The handle is offered only
+  for an edge two faces share, and a fillet that fails is a
+  GeometryError the gumball swallows, not a traceback.
 - **Ctrl+Shift-clicking a mesh no longer blacks out the view.** The pick
   held a mesh "face"; the gumball asked for the B-rep faces of a mesh
   on every mouse move, the explorer refused with a TypeError, and with

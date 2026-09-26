@@ -479,6 +479,10 @@ class Gumball:
             elist = g.edges_of(obj.shape)
             if any(not (0 <= i < len(elist)) for i in idxs):
                 return None
+            # a fillet rounds between two faces; a surface's border has
+            # one, and OCCT raised on every mouse move when asked
+            if any(len(g.edge_faces(obj.shape, i)) < 2 for i in idxs):
+                return None
             mids = [np.asarray(g.centroid(elist[i]), float) for i in idxs]
             lo, hi = obj.bbox()
             solid_c = (np.asarray(lo, float) + np.asarray(hi, float)) / 2.0
