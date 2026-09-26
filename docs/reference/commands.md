@@ -171,7 +171,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `material` (`mat`) | Assign a look (metallic/roughness/opacity) for rendered display and GLB/USD export. |
 | `offset` | Offset |
 | `plugins` | List loaded plugins and where they came from. |
-| `rebuild` | Rebuild |
+| `rebuild` | Rebuild curves or surfaces with a chosen number of control points. |
 | `recordhistory` (`history`) | Toggle record history: loft/extrude/revolve outputs rebuild when their input curves are edited. |
 | `redo` | Redo |
 | `removecontrolpoint` | Delete the control points you are holding, as Delete does. |
@@ -221,7 +221,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `lock` | Lock |
 | `lockother` | Lock everything except what you picked, as Rhino's LockOther does. |
 | `matchprops` (`matchproperties`) | Copy layer, colour and material from one object to others. |
-| `meshtobrep` | Convert mesh objects into exact BREP shells (slow for big meshes). |
+| `meshtobrep` | Convert mesh objects into exact BREP shells — a face per triangle. |
 | `pointcloud` (`pc`) | Point clouds: `info` says what a scan holds; `subsample` keeps an even fraction of its points, which is the cheap way to make a scan the laptop can orbit. |
 | `purge` | Remove empty layers and unused block definitions. |
 | `sendbackward` (`sendbackwards`) | Nudge the selected objects one step towards the back. |
@@ -291,6 +291,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `extrude` (`ext`, `extrudecrv`) | Extrude |
 | `helix` | Helix |
 | `loft` | Loft |
+| `mergesrf` (`mergesurfaces`) | Merge two surfaces that share an edge into one, with one net of points. |
 | `offsetsrf` | Offsetsrf |
 | `patch` (`networksrf`) | Patch |
 | `pipe` | Pipe |

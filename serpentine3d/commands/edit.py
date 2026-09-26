@@ -2,7 +2,7 @@
 
 from ..core import geometry as g
 from .base import (
-    NumberReq, OptionReq, PointReq, Scrub, SelectReq, TextReq, command)
+    IntReq, NumberReq, OptionReq, PointReq, Scrub, SelectReq, TextReq, command)
 
 
 def _delete_held_points(ctx) -> bool:
@@ -400,15 +400,51 @@ def cmd_trim(ctx):
 
 @command("rebuild")
 def cmd_rebuild(ctx):
-    objs = yield SelectReq("Select curves to rebuild", kinds=("curve",))
-    from .base import IntReq
-    count = yield IntReq("Point count", default=10, minimum=2)
-    degree = yield IntReq("Degree", default=3, minimum=1)
-    for o in objs:
-        ctx.scene.replace_shape(
-            o.id, g.rebuild_curve(o.shape, point_count=count, degree=degree))
-    ctx.echo(f"Rebuilt {len(objs)} curve(s) with {count} points, "
-             f"degree {degree}.")
+    """Rebuild curves or surfaces with a chosen number of control points.
+
+    Rhino's Rebuild. A curve gets a point count and a degree; a surface
+    gets a count each way and a degree, and says how far the new one
+    strays from the old. The way to make a dense surface — a MergeSrf
+    fit, an import — into something with a net you can pull on.
+    """
+    objs = yield SelectReq("Select curves or surfaces to rebuild",
+                           kinds=("curve", "surface"))
+    curves = [o for o in objs if o.kind == "curve"]
+    surfaces = [o for o in objs if o.kind == "surface"]
+    if curves:
+        count = yield IntReq("Point count", default=10, minimum=2)
+        degree = yield IntReq("Degree", default=3, minimum=1)
+        for o in curves:
+            ctx.scene.replace_shape(
+                o.id, g.rebuild_curve(o.shape, point_count=count,
+                                      degree=degree))
+        ctx.echo(f"Rebuilt {len(curves)} curve(s) with {count} points, "
+                 f"degree {degree}.")
+    if surfaces:
+        try:
+            nu, nv = g.surface_control_points(surfaces[0].shape)[1]
+        except g.GeometryError:
+            nu, nv = 6, 6
+        count_u = yield IntReq("Points in U", default=max(nu, 2), minimum=2)
+        count_v = yield IntReq("Points in V", default=max(nv, 2), minimum=2)
+        degree = yield IntReq("Degree (1 to 3)", default=3, minimum=1)
+        done = 0
+        for o in surfaces:
+            try:
+                face, dev = g.rebuild_surface(o.shape, count_u, count_v,
+                                              degree)
+            except g.GeometryError as exc:
+                ctx.echo(f"{o.name}: {exc}")
+                continue
+            ctx.scene.replace_shape(o.id, face)
+            grid = g.surface_control_points(face)[1]
+            ctx.echo(f"{o.name}: rebuilt with {grid[0]}×{grid[1]} points, "
+                     f"degree {degree} — within {dev:.3g} {ctx.scene.units} "
+                     "of the old surface.")
+            done += 1
+        if not done:
+            ctx.echo("Nothing rebuilt.")
+    ctx.select_result([o for o in objs if ctx.scene.get(o.id) is not None])
 
 
 # --- knots ------------------------------------------------------------------
@@ -569,7 +605,6 @@ def cmd_changedegree(ctx):
     surface you mean to sculpt wants. Only upward: lowering a degree
     moves the shape, and `rebuild` is the honest way to do that.
     """
-    from .base import IntReq
     objs = yield SelectReq("Select curves or surfaces to raise the degree "
                            "of", kinds=("curve", "surface"))
     surfaces = [o for o in objs if o.kind == "surface"]
@@ -597,6 +632,7 @@ def cmd_changedegree(ctx):
             ctx.echo(f"{o.name}: {exc}")
     ctx.echo(f"Degree {degree} on {done} object(s)." if done
              else "Nothing changed.")
+    ctx.select_result(objs)          # still held: the next pull is on them
 
 
 @command("removeknot")

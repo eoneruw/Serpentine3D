@@ -92,7 +92,7 @@ commits a value mid-command, or repeats the last command.
 | | Commands |
 |---|---|
 | **Curves** | `line` `polyline` `curve` (NURBS by control points) `interpcrv` (through the points) `circle` `arc` `ellipse` `rectangle` `helix` `textobject` `blendcrv` `project` `pull` `intersect` |
-| **Surfaces** | `extrude` `revolve` `loft` `sweep1` `sweep2` `planarsrf` `patch`/`networksrf` `offsetsrf` `unrollsrf` |
+| **Surfaces** | `extrude` `revolve` `loft` `sweep1` `sweep2` `planarsrf` `patch`/`networksrf` `offsetsrf` `extendsrf` (one surface, not a strip sewn on) `mergesrf` (two surfaces sharing an edge → one net of control points) `unrollsrf` |
 | **Solids** | `box` `sphere` `cylinder` `cone` `torus` `filletedge` `chamferedge` (both pick edges directly; fillets chain and take `start,end` variable radii) `shell` `cap` `contour` `section` `booleansplit` `pushpull` |
 | **Deform** | `twist` `taper` `bend` `flow` (curve-to-curve) `extend` `matchcrv` |
 | **Booleans** | `booleanunion` `booleandifference` `booleanintersection` |

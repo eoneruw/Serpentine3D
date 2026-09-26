@@ -2913,6 +2913,29 @@ def new_control_rows_at(shape, point, direction: str = "u") -> list:
             if len(line) > 1]
 
 
+def new_control_rows_at(shape, point, direction: str = "u") -> list:
+    """The row(s) of control points insert_surface_knot would add through
+    `point`, as polylines to ghost — the handles themselves, not the line
+    on the surface they act on, so what is shown is what appears."""
+    import numpy as np
+    new = insert_surface_knot(shape, point, direction)
+    pts, (nu, nv) = surface_control_points(new)
+    grid = np.asarray(pts, float).reshape(nu, nv, 3)
+    target = np.asarray(point, float)
+    out = []
+    want = direction.lower()
+    if want in ("u", "both") and nu > 1:
+        rows = [grid[i] for i in range(nu)]
+        out.append(min(rows, key=lambda r: np.linalg.norm(
+            r - target, axis=1).min()))
+    if want in ("v", "both") and nv > 1:
+        cols = [grid[:, j] for j in range(nv)]
+        out.append(min(cols, key=lambda c: np.linalg.norm(
+            c - target, axis=1).min()))
+    return [make_polyline([tuple(p) for p in line]) for line in out
+            if len(line) > 1]
+
+
 def _remove_surface_knot_at(bs, which: str, param: float):
     """Take the interior knot nearest `param` out of the surface in one
     direction ("u" or "v"). The surface moves; the deviation is the
@@ -4416,9 +4439,164 @@ def _strip_from_rows(anchor_row, tangent_row, length, v_knots, v_mults,
     return mk.Face()
 
 
+def _boundary_of_edge(bs, edge) -> str:
+    """Which side of the surface's pole net an edge lies on: u0, u1, v0
+    or v1 — the row of poles nearest the edge's middle."""
+    import numpy as np
+    ad = occ.edge_adaptor(edge)
+    mid = ad.Value((ad.FirstParameter() + ad.LastParameter()) / 2)
+    m = np.array((mid.X(), mid.Y(), mid.Z()))
+    return min(("u0", "u1", "v0", "v1"), key=lambda side: float(
+        np.linalg.norm(np.mean(_corner_rows(bs, side), axis=0) - m)))
+
+
+def _knot_vector(bs, which: str) -> tuple[list[float], list[int]]:
+    """A surface's knots and multiplicities in one direction."""
+    if which == "u":
+        n = bs.NbUKnots()
+        return ([bs.UKnot(i) for i in range(1, n + 1)],
+                [bs.UMultiplicity(i) for i in range(1, n + 1)])
+    n = bs.NbVKnots()
+    return ([bs.VKnot(i) for i in range(1, n + 1)],
+            [bs.VMultiplicity(i) for i in range(1, n + 1)])
+
+
+def _restore_knots(out, u_knots, u_mults, v_knots, v_mults):
+    """Putting Bezier patches back together spaces the knots evenly and
+    leaves every interior one at full multiplicity. Put the original
+    spacing back (only then is the surface smooth in parameter where it
+    is smooth in space) and take each multiplicity back to what it was.
+    Exact: nothing moves. Knots beyond the lists given are left as they
+    are; a multiplicity that will not go is left too."""
+    from OCP.TColStd import TColStd_Array1OfReal
+    for which, knots, mults in (("u", u_knots, u_mults),
+                                ("v", v_knots, v_mults)):
+        n = out.NbUKnots() if which == "u" else out.NbVKnots()
+        arr = TColStd_Array1OfReal(1, n)
+        for i in range(1, n + 1):
+            have = (out.UKnot(i) if which == "u" else out.VKnot(i))
+            arr.SetValue(i, knots[i - 1] if i <= len(knots) else have)
+        (out.SetUKnots if which == "u" else out.SetVKnots)(arr)
+        for i, m in enumerate(mults[1:-1], start=2):
+            if i >= n:
+                break
+            mult = out.UMultiplicity(i) if which == "u" \
+                else out.VMultiplicity(i)
+            if mult > m:
+                (out.RemoveUKnot if which == "u"
+                 else out.RemoveVKnot)(i, m, tight())
+
+
+def _extend_bspline_after_u(bs, length: float):
+    """The surface `bs` continued past its u1 side by about `length`, as
+    one B-spline surface with the original left exactly as it was.
+
+    The surface is taken apart into its Bezier patches, a strip of
+    patches is added beyond the last column — each row of poles carried
+    on along its own last leg, scaled so the middle row goes `length` —
+    and the lot is put back together as one B-spline. The seam's span is
+    set so the tangent matches in parameter as well as in space, and the
+    seam knot is then taken down to a single one, which is what makes the
+    surface one smooth piece rather than two glued.
+    """
+    import numpy as np
+    from OCP.Geom import Geom_BezierSurface, Geom_BSplineSurface
+    from OCP.GeomConvert import (GeomConvert_BSplineSurfaceToBezierSurface,
+                                 GeomConvert_CompBezierSurfacesToBSplineSurface)
+    from OCP.TColGeom import TColGeom_Array2OfBezierSurface
+    from OCP.TColgp import TColgp_Array2OfPnt
+    u_knots, u_mults = _knot_vector(bs, "u")
+    v_knots, v_mults = _knot_vector(bs, "v")
+    conv = GeomConvert_BSplineSurfaceToBezierSurface(bs)
+    nu, nv = conv.NbUPatches(), conv.NbVPatches()
+    p = bs.UDegree()
+
+    def last_leg(patch, k):
+        n_u = patch.NbUPoles()
+        a = np.array(pnt_tuple(patch.Pole(n_u, k)))
+        b = np.array(pnt_tuple(patch.Pole(n_u - 1, k)))
+        return a, a - b
+
+    mid_patch = conv.Patch(nu, (nv + 1) // 2)
+    _a, leg = last_leg(mid_patch, (mid_patch.NbVPoles() + 1) // 2)
+    if float(np.linalg.norm(leg)) < 1e-12:
+        raise GeometryError("The surface has no direction to grow in there")
+    scale = float(length) / float(np.linalg.norm(leg))
+
+    arr = TColGeom_Array2OfBezierSurface(1, nu + 1, 1, nv)
+    for i in range(1, nu + 1):
+        for j in range(1, nv + 1):
+            arr.SetValue(i, j, conv.Patch(i, j))
+    for j in range(1, nv + 1):
+        patch = conv.Patch(nu, j)
+        n_v = patch.NbVPoles()
+        poles = TColgp_Array2OfPnt(1, 2, 1, n_v)
+        for k in range(1, n_v + 1):
+            a, leg = last_leg(patch, k)
+            poles.SetValue(1, k, _pnt(tuple(a)))
+            poles.SetValue(2, k, _pnt(tuple(a + scale * leg)))
+        strip = Geom_BezierSurface(poles)
+        strip.Increase(p, patch.VDegree())
+        arr.SetValue(nu + 1, j, strip)
+    comp = GeomConvert_CompBezierSurfacesToBSplineSurface(arr)
+    if not comp.IsDone():
+        raise GeometryError("The extension would not join up")
+    out = Geom_BSplineSurface(comp.Poles(), comp.UKnots(), comp.VKnots(),
+                              comp.UMultiplicities(), comp.VMultiplicities(),
+                              comp.UDegree(), comp.VDegree())
+    # the original's own knots as they were; the strip's span follows
+    # from its last span, so the tangent matches in parameter as well
+    _restore_knots(out, u_knots, u_mults, v_knots, v_mults)
+    nk = out.NbUKnots()
+    span = u_knots[-1] - u_knots[-2]
+    out.SetUKnot(nk, out.UKnot(nk - 1) + scale * span / max(p, 1))
+    if p >= 2 and not out.RemoveUKnot(nk - 1, p - 1, tight()):
+        # the seam: one knot, so the two are one surface; this is exact
+        # (the strip was built to be) and only fails on a fold
+        raise GeometryError("The extension would fold at the edge")
+    return out
+
+
 def extend_surface(shape, edge_index: int, length: float) -> TopoDS_Shape:
-    """Extend a single-face surface past one boundary edge by a tangent
-    ruled strip, sewn with the base into one shell."""
+    """Extend a single-face surface past one boundary edge, as one surface.
+
+    The extension continues each row of control points along its last
+    leg, tangent to the surface, and the result is a single B-spline
+    surface — the original untouched, one new row of handles beyond the
+    edge, the whole net still there to pull on. It used to be a strip
+    sewn on, which left two faces that no longer had points to turn on.
+    A rational surface (one with weights) still gets the sewn strip.
+    """
+    if length <= 0:
+        raise GeometryError("Extension length must be positive")
+    faces = faces_of(shape)
+    if len(faces) != 1:
+        raise GeometryError("ExtendSrf works on single surfaces")
+    face = faces[0]
+    edges = edges_of(face)
+    if not (0 <= edge_index < len(edges)):
+        raise GeometryError("Edge index out of range")
+    bs, _ = _face_bspline_surface(face)
+    if bs.IsURational() or bs.IsVRational():
+        return _extend_surface_sewn(shape, edge_index, length)
+    side = _boundary_of_edge(bs, edges[edge_index])
+    # every side is "after u1" once the surface is turned to put it there
+    _turn_side_to(bs, side, "u1")
+    try:
+        out = _extend_bspline_after_u(bs, length)
+    except GeometryError:
+        return _extend_surface_sewn(shape, edge_index, length)
+    _turn_side_to(out, side, "u1", back=True)
+    mk = BRepBuilderAPI_MakeFace(out, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    return mk.Face()
+
+
+def _extend_surface_sewn(shape, edge_index: int, length: float) -> TopoDS_Shape:
+    """The old ExtendSrf: a tangent ruled strip sewn onto the base. What a
+    rational surface still gets, since the one-piece path cannot carry
+    weights."""
     if length <= 0:
         raise GeometryError("Extension length must be positive")
     faces = faces_of(shape)
@@ -4429,44 +4607,23 @@ def extend_surface(shape, edge_index: int, length: float) -> TopoDS_Shape:
     if not (0 <= edge_index < len(edges)):
         raise GeometryError("Edge index out of range")
     edge = edges[edge_index]
-    ad = occ.edge_adaptor(edge)
-    mid = ad.Value((ad.FirstParameter() + ad.LastParameter()) / 2)
-
     bs, _ = _face_bspline_surface(face)
     nu, nv = bs.NbUPoles(), bs.NbVPoles()
     if nu < 2 or nv < 2:
         raise GeometryError("Surface too simple to extend")
     rational = bs.IsURational() or bs.IsVRational()
-
-    def pole(i, j):
-        return pnt_tuple(bs.Pole(i, j))
-
-    def weight(i, j):
-        return bs.Weight(i, j)
-
-    # candidate boundaries: (anchor_row, inner_row, along-V?)
-    candidates = {
-        "u0": ([pole(1, j) for j in range(1, nv + 1)],
-               [pole(2, j) for j in range(1, nv + 1)],
-               [weight(1, j) for j in range(1, nv + 1)], True),
-        "u1": ([pole(nu, j) for j in range(1, nv + 1)],
-               [pole(nu - 1, j) for j in range(1, nv + 1)],
-               [weight(nu, j) for j in range(1, nv + 1)], True),
-        "v0": ([pole(i, 1) for i in range(1, nu + 1)],
-               [pole(i, 2) for i in range(1, nu + 1)],
-               [weight(i, 1) for i in range(1, nu + 1)], False),
-        "v1": ([pole(i, nv) for i in range(1, nu + 1)],
-               [pole(i, nv - 1) for i in range(1, nu + 1)],
-               [weight(i, nv) for i in range(1, nu + 1)], False),
-    }
-
-    def row_dist(row):
-        import numpy as np
-        c = np.mean(np.asarray(row, float), axis=0)
-        return float(np.linalg.norm(c - (mid.X(), mid.Y(), mid.Z())))
-
-    key = min(candidates, key=lambda k: row_dist(candidates[k][0]))
-    anchor, inner, weights_row, along_v = candidates[key]
+    side = _boundary_of_edge(bs, edge)
+    along_v = side[0] == "u"                 # a u side runs along v
+    anchor = _corner_rows(bs, side)
+    inner = _corner_rows(bs, side, depth=1)
+    if side == "u0":
+        weights_row = [bs.Weight(1, j) for j in range(1, nv + 1)]
+    elif side == "u1":
+        weights_row = [bs.Weight(nu, j) for j in range(1, nv + 1)]
+    elif side == "v0":
+        weights_row = [bs.Weight(i, 1) for i in range(1, nu + 1)]
+    else:
+        weights_row = [bs.Weight(i, nv) for i in range(1, nu + 1)]
     tangents = [tuple(a - b for a, b in zip(p, q))
                 for p, q in zip(anchor, inner)]
     if along_v:
@@ -4491,6 +4648,326 @@ def extend_surface(shape, edge_index: int, length: float) -> TopoDS_Shape:
     if out.IsNull():
         raise GeometryError("Extension could not be joined to the surface")
     return out
+
+
+def _turn_side_to(bs, side: str, want: str, back: bool = False):
+    """Turn a B-spline surface in place so that boundary `side` (u0, u1,
+    v0, v1) becomes `want` ("u0" or "u1"); with `back`, undo that turn.
+    The geometry is unchanged either way."""
+    steps = []
+    if side[0] == "v":
+        steps.append(bs.ExchangeUV)
+    if side[1] != want[1]:
+        steps.append(bs.UReverse)
+    for step in (reversed(steps) if back else steps):
+        step()
+
+
+def _corner_rows(bs, side: str, depth: int = 0):
+    """The row of poles on a side, first to last along it — or, with a
+    depth, the row that many in from it."""
+    nu, nv = bs.NbUPoles(), bs.NbVPoles()
+    if side == "u0":
+        return [pnt_tuple(bs.Pole(1 + depth, j)) for j in range(1, nv + 1)]
+    if side == "u1":
+        return [pnt_tuple(bs.Pole(nu - depth, j)) for j in range(1, nv + 1)]
+    if side == "v0":
+        return [pnt_tuple(bs.Pole(i, 1 + depth)) for i in range(1, nu + 1)]
+    return [pnt_tuple(bs.Pole(i, nv - depth)) for i in range(1, nu + 1)]
+
+
+def _shared_sides(ba, bb):
+    """The pair of sides (one of each surface) that lie along each other,
+    by how close their end poles come — and whether they run opposite."""
+    import numpy as np
+    best = None
+    for sa in ("u0", "u1", "v0", "v1"):
+        ra = np.asarray(_corner_rows(ba, sa), float)
+        for sb in ("u0", "u1", "v0", "v1"):
+            rb = np.asarray(_corner_rows(bb, sb), float)
+            same = np.linalg.norm(ra[0] - rb[0]) + np.linalg.norm(ra[-1] - rb[-1])
+            flip = np.linalg.norm(ra[0] - rb[-1]) + np.linalg.norm(ra[-1] - rb[0])
+            d, rev = (same, False) if same <= flip else (flip, True)
+            if best is None or d < best[0]:
+                best = (d, sa, sb, rev)
+    return best
+
+
+def _make_compatible_v(ba, bb):
+    """Bring two surfaces to the same V degree and V knots, both on
+    [0, 1]. Exact: neither moves."""
+    from OCP.TColStd import TColStd_Array1OfReal
+    for bs in (ba, bb):
+        v0, v1 = bs.Bounds()[2:]
+        knots = TColStd_Array1OfReal(1, bs.NbVKnots())
+        for i in range(1, bs.NbVKnots() + 1):
+            knots.SetValue(i, (bs.VKnot(i) - v0) / (v1 - v0))
+        bs.SetVKnots(knots)
+    deg = max(ba.VDegree(), bb.VDegree())
+    for bs in (ba, bb):
+        if bs.VDegree() < deg:
+            bs.IncreaseDegree(bs.UDegree(), deg)
+    # each takes the other's knots; Add=False sets a knot's multiplicity
+    # to the larger of the two rather than summing them
+    for src, dst in ((ba, bb), (bb, ba)):
+        for i in range(2, src.NbVKnots()):
+            dst.InsertVKnot(src.VKnot(i), src.VMultiplicity(i), tight(),
+                            False)
+
+
+def _merge_exact(ba, bb):
+    """One B-spline from two whose shared rows of poles coincide."""
+    import numpy as np
+    from OCP.Geom import Geom_BSplineSurface
+    from OCP.GeomConvert import (GeomConvert_BSplineSurfaceToBezierSurface,
+                                 GeomConvert_CompBezierSurfacesToBSplineSurface)
+    from OCP.TColGeom import TColGeom_Array2OfBezierSurface
+    if ba.NbVPoles() != bb.NbVPoles():
+        raise GeometryError("not compatible")
+    if any(b.IsURational() or b.IsVRational() for b in (ba, bb)):
+        # the Bezier assembly cannot carry weights (a Weight edit makes
+        # a surface rational); such a pair is fitted instead
+        raise GeometryError("not compatible")
+    ra = np.asarray(_corner_rows(ba, "u1"), float)
+    rb = np.asarray(_corner_rows(bb, "u0"), float)
+    size = max(float(np.ptp(np.vstack([ra, rb]), axis=0).max()), 1.0)
+    if float(np.linalg.norm(ra - rb, axis=1).max()) > size * 1e-5:
+        raise GeometryError("not compatible")
+    p = max(ba.UDegree(), bb.UDegree())
+    for bs in (ba, bb):
+        if bs.UDegree() < p:
+            bs.IncreaseDegree(p, bs.VDegree())
+    ua_knots, ua_mults = _knot_vector(ba, "u")
+    ub_knots, ub_mults = _knot_vector(bb, "u")
+    v_knots, v_mults = _knot_vector(ba, "v")
+    ca = GeomConvert_BSplineSurfaceToBezierSurface(ba)
+    cb = GeomConvert_BSplineSurfaceToBezierSurface(bb)
+    if ca.NbVPatches() != cb.NbVPatches():
+        raise GeometryError("not compatible")
+    nua, nub, nv = ca.NbUPatches(), cb.NbUPatches(), ca.NbVPatches()
+    arr = TColGeom_Array2OfBezierSurface(1, nua + nub, 1, nv)
+    for i in range(1, nua + 1):
+        for j in range(1, nv + 1):
+            arr.SetValue(i, j, ca.Patch(i, j))
+    for i in range(1, nub + 1):
+        for j in range(1, nv + 1):
+            arr.SetValue(nua + i, j, cb.Patch(i, j))
+    comp = GeomConvert_CompBezierSurfacesToBSplineSurface(arr)
+    if not comp.IsDone():
+        raise GeometryError("not compatible")
+    out = Geom_BSplineSurface(comp.Poles(), comp.UKnots(), comp.VKnots(),
+                              comp.UMultiplicities(),
+                              comp.VMultiplicities(),
+                              comp.UDegree(), comp.VDegree())
+    # every interior knot came back evenly spaced at full multiplicity;
+    # the two halves' own knots go back to what they were (B's carried
+    # on from A's end), the seam stays as it is
+    shift = ua_knots[-1] - ub_knots[0]
+    u_knots = ua_knots + [k + shift for k in ub_knots[1:]]
+    u_mults = ua_mults[:-1] + [p] + ub_mults[1:]
+    _restore_knots(out, u_knots, u_mults, v_knots, v_mults)
+    return out, nua + 1                     # and where the seam knot is
+
+
+def _merge_by_fit(ba, bb, tolerance: float):
+    """One surface fitted through both, for two whose edges run alike in
+    space but not in parameter — a blend against the panel it meets.
+    Rows across both are sampled by arc length along each surface's own
+    isocurves, so the rows meet at the seam, and a cubic surface is fitted
+    to within `tolerance`."""
+    from OCP.GeomAbs import GeomAbs_Shape
+    from OCP.GeomAPI import GeomAPI_PointsToBSplineSurface
+    from OCP.TColgp import TColgp_Array2OfPnt
+    n_v = max(ba.NbVPoles(), bb.NbVPoles(), 6) * 3
+    na = max(ba.NbUPoles(), 4) * 3
+    nb = max(bb.NbUPoles(), 4) * 3
+    # the seam row once: it is the last of A's rows and the first of B's
+    grid = (_surface_sample_grid(ba, na, n_v)
+            + _surface_sample_grid(bb, nb, n_v)[1:])
+    pts = TColgp_Array2OfPnt(1, len(grid), 1, n_v)
+    for i, row in enumerate(grid, start=1):
+        for j, q in enumerate(row, start=1):
+            pts.SetValue(i, j, _pnt(q))
+    fit = GeomAPI_PointsToBSplineSurface(pts, 3, 3,
+                                         GeomAbs_Shape.GeomAbs_C2,
+                                         float(tolerance))
+    if not fit.IsDone():
+        raise GeometryError("Could not fit one surface through both")
+    return fit.Surface()
+
+
+def _surface_sample_grid(bs, n_u: int, n_v: int):
+    """An n_u × n_v grid of points on a B-spline surface, rows along U
+    at even parameters, each row spaced evenly by arc length along its
+    isocurve."""
+    import numpy as np
+    from OCP.GCPnts import GCPnts_UniformAbscissa
+    from OCP.GeomAdaptor import GeomAdaptor_Curve
+    u0, u1, v0, v1 = bs.Bounds()
+    rows = []
+    for u in np.linspace(u0, u1, n_u):
+        iso = bs.UIso(float(u))
+        ua = GCPnts_UniformAbscissa(GeomAdaptor_Curve(iso), n_v, v0, v1)
+        if ua.IsDone() and ua.NbPoints() == n_v:
+            params = [ua.Parameter(i) for i in range(1, n_v + 1)]
+        else:
+            params = list(np.linspace(v0, v1, n_v))
+        rows.append([pnt_tuple(iso.Value(float(par))) for par in params])
+    return rows
+
+
+def rebuild_surface(shape, count_u: int, count_v: int,
+                    degree: int = 3) -> tuple:
+    """A new surface with `count_u` × `count_v` control points fitted
+    through the old one — Rhino's Rebuild on a surface. Degree 3 goes
+    through the samples exactly (an interpolation); lower degrees fit.
+    Returns (face, deviation from the original)."""
+    from OCP.GeomAbs import GeomAbs_Shape
+    from OCP.GeomAPI import GeomAPI_PointsToBSplineSurface
+    from OCP.TColgp import TColgp_Array2OfPnt
+    faces = faces_of(shape)
+    if len(faces) != 1:
+        raise GeometryError("Rebuild works on single surfaces")
+    bs, _ = _face_bspline_surface(faces[0])
+    n_u, n_v = max(int(count_u), 2), max(int(count_v), 2)
+    degree = max(1, min(int(degree), 3))
+    # a cubic interpolation through n points has n + 2 poles (the end
+    # conditions), so it is asked for two fewer to land on the count
+    interp = degree == 3 and n_u >= 5 and n_v >= 5
+    s_u, s_v = (n_u - 2, n_v - 2) if interp else (n_u, n_v)
+    grid = _surface_sample_grid(bs, s_u, s_v)
+    pts = TColgp_Array2OfPnt(1, s_u, 1, s_v)
+    for i, row in enumerate(grid, start=1):
+        for j, q in enumerate(row, start=1):
+            pts.SetValue(i, j, _pnt(q))
+    try:
+        fit = GeomAPI_PointsToBSplineSurface()
+        if interp:
+            fit.Interpolate(pts)
+        else:
+            cont = (GeomAbs_Shape.GeomAbs_C0 if degree < 2
+                    else GeomAbs_Shape.GeomAbs_C1)
+            fit.Init(pts, degree, degree, cont, 1e-4)
+        if not fit.IsDone():
+            raise GeometryError("Rebuild failed")
+        out = fit.Surface()
+    except GeometryError:
+        raise
+    except Exception as exc:                                   # noqa: BLE001
+        raise GeometryError(f"Rebuild failed: {exc}") from exc
+    mk = BRepBuilderAPI_MakeFace(out, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    face = mk.Face()
+    return face, surface_deviation(faces[0], face)
+
+
+def _is_trimmed(face) -> bool:
+    """Whether a face uses less than its whole underlying surface."""
+    from OCP.BRep import BRep_Tool
+    from OCP.BRepTools import BRepTools
+    surf = BRep_Tool.Surface_s(occ.to_face(face))
+    su0, su1, sv0, sv1 = surf.Bounds()
+    fu0, fu1, fv0, fv1 = BRepTools.UVBounds_s(occ.to_face(face))
+    eu = max(abs(su1 - su0), 1e-9) * 1e-6
+    ev = max(abs(sv1 - sv0), 1e-9) * 1e-6
+    return (abs(fu0 - su0) > eu or abs(fu1 - su1) > eu
+            or abs(fv0 - sv0) > ev or abs(fv1 - sv1) > ev)
+
+
+def _smooth_seam(out, tolerance: float, seam: int):
+    """Take the seam knot of a surface made from two down to one, so the
+    two are one smooth surface, when the two were tangent there.
+
+    The two halves were put together with a uniform knot per patch, so
+    even a tangent seam is not C1 in parameter: the derivative jumps by
+    the ratio of the legs either side. The far side is reparametrised by
+    that ratio first (the surface does not move), and then the knot can
+    go where the geometry allows it to."""
+    import numpy as np
+    from OCP.TColStd import TColStd_Array1OfReal
+    p = out.UDegree()
+    if p < 2 or not (2 <= seam < out.NbUKnots()):
+        return
+    # the pole column on the seam, and the legs either side of it
+    col = sum(out.UMultiplicity(i) for i in range(1, seam + 1)) - p
+    nv = out.NbVPoles()
+    ratios = []
+    for j in range(1, nv + 1):
+        c = np.array(pnt_tuple(out.Pole(col, j)))
+        a = np.linalg.norm(c - np.array(pnt_tuple(out.Pole(col - 1, j))))
+        b = np.linalg.norm(np.array(pnt_tuple(out.Pole(col + 1, j))) - c)
+        if a > 1e-12 and b > 1e-12:
+            ratios.append(b / a)
+    if not ratios:
+        return
+    r = float(np.median(ratios))
+    span_a = out.UKnot(seam) - out.UKnot(seam - 1)
+    span_b = out.UKnot(seam + 1) - out.UKnot(seam)
+    factor = span_a * r / span_b
+    knots = TColStd_Array1OfReal(1, out.NbUKnots())
+    at = out.UKnot(seam)
+    for i in range(1, out.NbUKnots() + 1):
+        k = out.UKnot(i)
+        knots.SetValue(i, k if i <= seam else at + (k - at) * factor)
+    out.SetUKnots(knots)
+    # exactly if it can be; else within the tolerance, which is the
+    # surface giving a little at the seam to be one piece — the caller
+    # measures and says how much
+    if not out.RemoveUKnot(seam, p - 1, tight()):
+        out.RemoveUKnot(seam, p - 1, tolerance)
+
+
+def merge_surfaces(shape_a, shape_b, smooth: bool = True) -> tuple:
+    """One surface from two single-face surfaces that share an edge.
+
+    Rhino's MergeSrf. When the two are the same surface split in two —
+    a surface and its old-style sewn extension, or two halves of one —
+    they go back together exactly, pole for pole, and only the seam knot
+    is asked to go (with `smooth`), which it does when the two were
+    tangent there. When their shared edges run alike in space but not
+    in parameter (a blend against the panel it was blended from), one
+    cubic surface is fitted through both instead, and how far it strays
+    is reported. Returns (face, exact: bool, deviation: float).
+    """
+    import numpy as np
+    fa, fb = faces_of(shape_a), faces_of(shape_b)
+    if len(fa) != 1 or len(fb) != 1:
+        raise GeometryError("MergeSrf takes two single surfaces")
+    fa, fb = fa[0], fb[0]
+    for f in (fa, fb):
+        if _is_trimmed(f):
+            raise GeometryError("MergeSrf takes untrimmed surfaces — "
+                                "Untrim first, or ShrinkTrimmedSrf")
+    ba, _ = _face_bspline_surface(fa)
+    bb, _ = _face_bspline_surface(fb)
+    d, sa, sb, rev = _shared_sides(ba, bb)
+    (lo, hi) = bbox(make_compound([fa, fb]))
+    size = max(float(np.linalg.norm(np.subtract(hi, lo))), 1.0)
+    if d > size * 0.05:
+        raise GeometryError("These two surfaces do not share an edge")
+    _turn_side_to(ba, sa, "u1")
+    _turn_side_to(bb, sb, "u0")
+    if rev:
+        bb.VReverse()
+    from OCP.Standard import Standard_Failure
+    exact = True
+    try:
+        _make_compatible_v(ba, bb)
+        out, seam = _merge_exact(ba, bb)
+    except (GeometryError, Standard_Failure):
+        # not the same surface in two pieces (or the kernel would not
+        # have it): fit one through both instead
+        exact = False
+        out = _merge_by_fit(ba, bb, tolerance=size * 1e-4)
+    if smooth and exact:
+        _smooth_seam(out, size * 5e-3, seam)
+    mk = BRepBuilderAPI_MakeFace(out, tol())
+    if not mk.IsDone():
+        raise GeometryError("Surface rebuild failed")
+    face = mk.Face()
+    dev = max(surface_deviation(fa, face), surface_deviation(fb, face))
+    return face, exact, dev
 
 
 def blend_surfaces(face_a, edge_a, face_b, edge_b,

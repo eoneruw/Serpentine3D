@@ -4,6 +4,13 @@
 
 ### Fixed
 
+- **InsertKnot's new row lands where you pointed.** The knot went in at
+  the picked spot, but a knot at u is not a control point at u — a handle
+  acts at the mean of the knots beside it — so on a curved surface the new
+  row of handles came up well to one side of the yellow line. The knot is
+  now placed so the handle lands under the cursor (Rhino's
+  InsertControlPoint), and the ghost is the row of handles that will
+  appear rather than the line on the surface.
 - **A picture saved by a 0.9.x build of the fork still opens.** Those
   builds kept a picture as a record of their own in the object list, and
   a file with one in it would not open at all ("File was not written with
@@ -109,6 +116,18 @@
 
 ### Added
 
+- **ExtendSrf gives back one surface, and MergeSrf makes one of two.**
+  Extending a surface sewed a strip onto it, and the result was two
+  faces: Points On said "explode polysurfaces first", and a pulled
+  handle opened the seam. The extension is now part of the same B-spline
+  — the original untouched, one new row of handles beyond the edge. And
+  `mergesrf` (Rhino's MergeSrf) takes two untrimmed surfaces that share
+  an edge — a panel and its blend, a surface and an extension from an
+  older build, a two-face polysurface — and gives one surface with one
+  net of control points: exactly when the two are really one surface
+  cut in two, otherwise fitted through both with the deviation reported.
+  And `rebuild` takes surfaces now — a count each way and a degree —
+  which is how a dense fit comes down to a net you can pull on.
 - **Rows put into a loft bend rather than fold.** A loft between two
   curves is degree 1 across — straight between them — so rows of
   control points put into that direction and dragged made corners,
