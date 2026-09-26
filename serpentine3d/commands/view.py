@@ -452,9 +452,9 @@ def _set_environment(ctx, env: dict):
     """The scene's environment, every pane repainted, the Display panel
     told — the one road for the command and its chips."""
     ctx.scene.set_environment(**env)
-    panel = getattr(ctx.window, "display_panel", None)
-    if panel is not None:
-        panel.refresh()
+    dialog = getattr(ctx.window, "_display_settings", None)
+    if dialog is not None:                 # the settings window, if open
+        dialog.panel.refresh()
 
 
 @command("environment", aliases=("env", "skybox"), mutates=False)
