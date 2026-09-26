@@ -35,10 +35,12 @@ def test_a_u_knot_adds_a_row_and_v_a_column():
     assert g.surface_control_points(srf)[1] == (3, 2)
     assert g.surface_control_points(
         g.insert_surface_knot(srf, (50, 20, 40), "u"))[1] == (4, 2)
+    # across the loft the surface is degree 1, so a row there first
+    # lifts it to degree 3 (two more poles) and then adds its own
     assert g.surface_control_points(
-        g.insert_surface_knot(srf, (50, 20, 40), "v"))[1] == (3, 3)
+        g.insert_surface_knot(srf, (50, 20, 40), "v"))[1] == (3, 5)
     assert g.surface_control_points(
-        g.insert_surface_knot(srf, (50, 20, 40), "both"))[1] == (4, 3)
+        g.insert_surface_knot(srf, (50, 20, 40), "both"))[1] == (4, 5)
 
 
 def test_the_surface_does_not_move():
@@ -94,5 +96,5 @@ def test_the_command_takes_a_surface_and_a_direction(win):
     win.processor.provide_text("50,20,40")
     win.processor.provide_text("")
     assert not win.processor.busy
-    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (4, 3)
+    assert g.surface_control_points(win.scene.get(o.id).shape)[1] == (4, 5)
     assert o.id in win.viewport.cv_enabled, "points shown, ready to drag"
