@@ -658,6 +658,12 @@ class MainWindow(QMainWindow):
         vp.snaps = self.viewport.snaps
         vp.setAcceptDrops(True)
         vp.installEventFilter(self)
+        # Grid snap and Ortho live on the pane, and the Osnap bar spoke
+        # only to the primary's, so a pane opened by 4view kept the
+        # settings it was born with; they start from the primary's and
+        # the bar reaches every pane from here on.
+        vp.grid_snap = self.viewport.grid_snap
+        vp.ortho = self.viewport.ortho
         vp.displayModeChanged.connect(self._update_status)
         vp.layoutSelectionChanged.connect(self._update_status)
         vp.layoutSelectionChanged.connect(self.properties.refresh)
