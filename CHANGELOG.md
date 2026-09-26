@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **A picture saved by a 0.9.x build of the fork still opens.** Those
+  builds kept a picture as a record of their own in the object list, and
+  a file with one in it would not open at all ("File was not written with
+  this version of the topology"), taking every other object with it. The
+  old record is read as the picture it was, crop window included.
 - **To Surfaces (`meshtobrep`) no longer beach-balls on a scan.** It makes
   a B-rep face per triangle, so a scanned panel of a few hundred thousand
   triangles meant minutes of frozen UI for a solid nothing can edit. Above
