@@ -22,6 +22,7 @@ IMPORT_FORMATS = [
     ("PLY point cloud", (".ply",)),
     ("E57 point cloud", (".e57",)),
     ("glTF", (".glb", ".gltf")),
+    ("USD", (".usd", ".usda", ".usdc", ".usdz")),
 ]
 
 EXPORT_FORMATS = [
@@ -184,6 +185,14 @@ def _import_file(scene, path: str, ext: str, report) -> int:
     if ext in (".glb", ".gltf"):
         from . import gltf
         named = gltf.import_gltf(path, units=scene.units)
+        for name, shape, color in named:
+            added = scene.add(shape, name=name)
+            if color is not None:
+                added.color = color
+        return len(named)
+    if ext in (".usd", ".usda", ".usdc", ".usdz"):
+        from . import usd
+        named = usd.import_usd(path, units=scene.units)
         for name, shape, color in named:
             added = scene.add(shape, name=name)
             if color is not None:
