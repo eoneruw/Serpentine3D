@@ -33,6 +33,12 @@ def cmd_selsolid(ctx):
     yield from ()
 
 
+@command("selmesh", aliases=("selmeshes",), mutates=False)
+def cmd_selmesh(ctx):
+    _select_kind(ctx, "mesh", "mesh(es)")
+    yield from ()
+
+
 @command("selpointcloud", aliases=("selpc", "selpointclouds"), mutates=False)
 def cmd_selpointcloud(ctx):
     _select_kind(ctx, "pointcloud", "point cloud(s)")

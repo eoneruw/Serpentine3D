@@ -10,7 +10,8 @@ import numpy as np
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QDockWidget, QFileDialog, QInputDialog, QMainWindow,
+    QApplication, QDockWidget, QFileDialog, QHBoxLayout, QInputDialog,
+    QMainWindow,
     QMenu, QMessageBox, QProgressDialog, QTabBar, QToolBar, QVBoxLayout,
     QWidget,
 )
@@ -144,8 +145,20 @@ class MainWindow(QMainWindow):
         from .ui.command_workspace import CommandWorkspace
         self.command_line = CommandLine()
         self.osnap_bar = OsnapBar(self.viewport, self.cfg)
+        # The selection filter beside the object snaps: the two strips
+        # along the bottom are both about what a click may land on, and
+        # the Osnap row is where Rhino keeps its filter too.
+        from .ui.selection_filter import SelectionFilterBar
+        self.filter_bar = SelectionFilterBar(self.selection,
+                                             on_change=self._update_status)
+        strip = QWidget()
+        strip_layout = QHBoxLayout(strip)
+        strip_layout.setContentsMargins(0, 0, 8, 0)
+        strip_layout.setSpacing(0)
+        strip_layout.addWidget(self.osnap_bar, 1)
+        strip_layout.addWidget(self.filter_bar)
         self.command_workspace = CommandWorkspace(
-            self, self.command_line, self._build_space_tab_row(), self.osnap_bar)
+            self, self.command_line, self._build_space_tab_row(), strip)
         self._cmd_dock = QDockWidget("Command", self)
         self._cmd_dock.setObjectName("commandDock")
         self._cmd_dock.setWidget(self.command_workspace)
@@ -894,6 +907,19 @@ class MainWindow(QMainWindow):
                      lambda: self.run_command("selnone"))
         self._action(m_edit, "Invert Selection", None,
                      lambda: self.run_command("invert"))
+        # The sel* commands, for people who would rather click than type.
+        m_sel = m_edit.addMenu("Select by Type")
+        for label, cmd in (("Points", "selpt"), ("Curves", "selcrv"),
+                           ("Surfaces", "selsrf"), ("Solids", "selsolid"),
+                           ("Meshes", "selmesh"),
+                           ("Point Clouds", "selpointcloud")):
+            self._action(m_sel, label, None,
+                         lambda c=cmd: self.run_command(c))
+        m_sel.addSeparator()
+        self._action(m_sel, "Same Layer as Selection", None,
+                     lambda: self.run_command("sellayer"))
+        self._action(m_sel, "Previous Selection", None,
+                     lambda: self.run_command("selprev"))
         m_edit.addSeparator()
         self._action(m_edit, "Control Points On", "F10",
                      lambda: self.run_command("pointson"))
@@ -2679,6 +2705,9 @@ class MainWindow(QMainWindow):
         if self.selection.filter_active and self.selection.filter_kinds:
             filt = ("  ·  filter: "
                     + ", ".join(sorted(self.selection.filter_kinds)))
+        bar = getattr(self, "filter_bar", None)
+        if bar is not None:
+            bar.sync()
         self.statusBar().showMessage(
             f"{n} object(s)  ·  {sel} selected  ·  layer: {layer}  ·  "
             f"{mode}  ·  units: {self.scene.units}{filt}")
