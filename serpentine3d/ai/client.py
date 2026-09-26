@@ -52,12 +52,15 @@ class AnthropicClient:
 
     def stream_message(self, system: str, messages: list[dict],
                        tools: list[dict], max_tokens: int = 8192,
-                       on_text=None, should_stop=None) -> dict:
+                       on_text=None, should_stop=None,
+                       on_thinking=None) -> dict:
         """Stream one assistant message.
 
         Returns {"content": [blocks], "stop_reason": str, "usage": {...}}.
-        `on_text(delta)` fires per text fragment; `should_stop()` aborts
-        the stream early when it returns True.
+        `on_text(delta)` fires per text fragment; `on_thinking(delta)` per
+        fragment of the model's reasoning, which is never text to show but
+        is proof that something is happening; `should_stop()` aborts the
+        stream early when it returns True.
         """
         payload = {
             "model": self.model,
@@ -81,7 +84,8 @@ class AnthropicClient:
                     body = resp.read().decode(errors="replace")
                     raise AiError(_friendly_http_error(resp.status_code,
                                                        body))
-                return self._consume(resp, on_text, should_stop)
+                return self._consume(resp, on_text, should_stop,
+                                     on_thinking)
         except httpx.ConnectError as exc:
             raise AiError(f"Could not reach api.anthropic.com: {exc}") \
                 from exc
@@ -90,7 +94,7 @@ class AnthropicClient:
 
     # ------------------------------------------------------------- SSE
 
-    def _consume(self, resp, on_text, should_stop) -> dict:
+    def _consume(self, resp, on_text, should_stop, on_thinking=None) -> dict:
         blocks: list[dict] = []
         partial_json: dict[int, str] = {}
         stop_reason = None
@@ -119,7 +123,16 @@ class AnthropicClient:
                 elif delta["type"] == "input_json_delta":
                     partial_json[idx] += delta["partial_json"]
                 elif delta["type"] == "thinking_delta":
-                    pass
+                    # Kept, not shown: the block goes back to the API as
+                    # history on the next turn, and it is rejected there
+                    # unless it is whole — text and signature both.
+                    blocks[idx]["thinking"] = (blocks[idx].get("thinking", "")
+                                               + delta["thinking"])
+                    if on_thinking:
+                        on_thinking(delta["thinking"])
+                elif delta["type"] == "signature_delta":
+                    blocks[idx]["signature"] = (blocks[idx].get("signature", "")
+                                                + delta["signature"])
             elif event == "message_delta":
                 stop_reason = data["delta"].get("stop_reason", stop_reason)
                 usage.update(data.get("usage") or {})
@@ -135,8 +148,25 @@ class AnthropicClient:
                 raise AiError(
                     f"Model produced invalid tool input JSON: {exc}") \
                     from exc
-        return {"content": [b for b in blocks if b is not None],
+        return {"content": [b for b in blocks
+                            if b is not None and _echoable(b)],
                 "stop_reason": stop_reason, "usage": usage}
+
+
+def _echoable(block: dict) -> bool:
+    """Whether a streamed block can be sent back as conversation history.
+
+    The models the panel now talks to think before they answer, and the
+    stream used to record only that a thinking block had started: an empty
+    shell that, sent back as history on the next turn, the API refused with
+    "each thinking block must contain thinking" — every conversation died
+    on its second message. A thinking block is echoed whole or not at all;
+    one that was cut short (the stream aborted mid-thought) is dropped.
+    """
+    if block.get("type") in ("thinking", "redacted_thinking"):
+        return bool(block.get("thinking")) and bool(block.get("signature")) \
+            or block.get("type") == "redacted_thinking"
+    return True
 
 
 def _sse_events(lines):
