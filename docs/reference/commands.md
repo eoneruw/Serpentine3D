@@ -74,6 +74,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `disableclippingplane` (`dcc`) | Pause clipping planes (they stay in the scene, the cut stops). |
 | `distance` (`dist`) | Distance |
 | `enableclippingplane` (`ecc`) | Re-enable paused clipping planes. |
+| `environment` (`env`, `skybox`) | The environment the PBR mode lights and reflects: Studio, Well-lit |
 | `floatviewport` (`floatvp`) | Open a floating viewport window (drag it to another monitor). |
 | `front` | Front |
 | `ghosted` (`gh`) | Ghosted |
@@ -157,14 +158,14 @@ Commands that need a file open a filtered chooser by default. Append
 |---|---|
 | `boundingbox` (`bb`) | Create the world-aligned bounding box of the selection. |
 | `chamfer` | Bevel the corner between two curves with straight cut-offs. |
+| `changedegree` | Raise the degree of a curve or surface without moving it. |
 | `delete` (`del`, `erase`) | Delete |
 | `dir` | Show which way curves run and which way surfaces face. |
 | `explode` (`x`) | Explode |
 | `fillet` | Fillet |
 | `flip` | Turn curves round and surfaces inside out, as Rhino's Flip does. |
 | `hide` | Hide |
-| `insertknot` (`insertcontrolpoint`) | Add a control point to a curve or a row of them to a surface (a degree-1 direction is raised to 3 first, so the rows bend). |
-| `changedegree` | Raise the degree of a curve or surface (Direction U/V/Both) without moving it; a loft is degree 1 across, and rows put into that fold rather than bend. |
+| `insertknot` (`insertcontrolpoint`) | Add a control point to a curve or a row of them to a surface. |
 | `join` (`j`) | Join |
 | `layer` | Layer |
 | `material` (`mat`) | Assign a look (metallic/roughness/opacity) for rendered display |
@@ -174,7 +175,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `recordhistory` (`history`) | Toggle record history: loft/extrude/revolve outputs rebuild when |
 | `redo` | Redo |
 | `removecontrolpoint` | Delete the control points you are holding, as Delete does. |
-| `removeknot` | Take a knot out of a curve, or a row (Direction U/V/Both) out of a surface, and say how far it moved. Delete on held surface points takes their row out too. |
+| `removeknot` | Take a knot out of a curve, or a row out of a surface, and say |
 | `rename` | Rename |
 | `selall` (`sa`) | Selall |
 | `selnone` (`sn`) | Selnone |
@@ -183,6 +184,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `split` | Split |
 | `trim` (`tr`) | Trim |
 | `undo` | Undo |
+| `weight` | Pull a curve or surface toward its held control points, by weight. |
 
 ## Files
 
@@ -240,6 +242,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `selfiltertoggle` (`sft`) | Pause/resume the selection filter without changing its kind. |
 | `sellast` | Sellast |
 | `sellayer` | Sellayer |
+| `selmesh` (`selmeshes`) | Selmesh |
 | `selname` | Select objects whose name contains the given text. |
 | `selpointcloud` (`selpc`, `selpointclouds`) | Selpointcloud |
 | `selprev` | Restore the previous selection. |
@@ -277,7 +280,7 @@ Commands that need a file open a filtered chooser by default. Append
 | Command | Does |
 |---|---|
 | `blendcrv` (`blend`) | Blendcrv |
-| `blendsrf` | Blend surface across the gap between two surface edges, tangent to both; asks for the edges if none are picked, then Bulge and Sections (drag the chips) and Continuity (click it) while you look at it; Sections + 2 is the number of control-point rows along the edge. |
+| `blendsrf` | Blend surface across the gap between two surface edges. |
 | `dupborder` | Dupborder |
 | `dupedge` | Duplicate Ctrl+Shift-picked edges as curves. |
 | `dupfaceborder` | Duplicate the border wires of Ctrl+Shift-picked faces as curves. |
@@ -297,8 +300,8 @@ Commands that need a file open a filtered chooser by default. Append
 | `revolve` (`rev`) | Revolve |
 | `shell` | Shell |
 | `sweep1` (`sweep`) | Sweep1 |
-| `sweep2` | Sweep2 |
-| `textobject` (`textcurves`) | Textobject |
+| `sweep2` | Sweep a profile along two rails. Pick the rails then the profile — |
+| `textobject` (`textcurves`) | Place editable model text or grouped letter outline curves. |
 | `unrollsrf` (`unroll`) | Unrollsrf |
 | `untrim` | Untrim |
 
