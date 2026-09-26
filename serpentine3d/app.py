@@ -633,14 +633,16 @@ class MainWindow(QMainWindow):
                      lambda: self.run_command("1view"))
         return menu
 
-    def _show_display_settings(self, vp):
-        """Open one set of controls for the pane whose menu was used."""
+    def _display_settings_for(self, vp):
+        """The one Display settings window, made for `vp` if it is not
+        already this pane's — not shown; _show_display_settings does that."""
         dialog = self._display_settings
         if dialog is not None and dialog.viewport is not vp:
             dialog.close()
             dialog = None
         if dialog is None:
-            dialog = DisplaySettingsDialog(vp, self)
+            dialog = DisplaySettingsDialog(
+                vp, self, all_panes=lambda: self.all_viewports())
             self._display_settings = dialog
 
             def forget(_result):
@@ -648,6 +650,17 @@ class MainWindow(QMainWindow):
                     self._display_settings = None
 
             dialog.finished.connect(forget)
+        return dialog
+
+    @property
+    def display_panel(self):
+        """The Display settings panel for the active pane (the window it
+        lives in is only shown when asked for from the pane's menu)."""
+        return self._display_settings_for(self.active_viewport).panel
+
+    def _show_display_settings(self, vp):
+        """Open one set of controls for the pane whose menu was used."""
+        dialog = self._display_settings_for(vp)
         dialog.panel.refresh()
         dialog.show()
         dialog.raise_()

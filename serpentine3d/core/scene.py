@@ -165,6 +165,10 @@ class SceneObject:
         return replace(self)
 
 
+DEFAULT_ENVIRONMENT = {"name": "studio", "rotation": 0.0,
+                       "exposure": 0.8, "background": False}
+
+
 class Scene:
     def __init__(self):
         self.objects: dict[str, SceneObject] = {}
@@ -176,6 +180,12 @@ class Scene:
         self._batch_depth = 0           # see batched()
         self._batched_kinds: set[str] = set()
         self.revision = 0               # bumped on every change notification
+        # What the PBR display mode lights and reflects: an environment
+        # id (or an image path), its rotation about Z in degrees, an
+        # exposure, and whether it is drawn behind the model. On the
+        # scene rather than a pane because the sky is one sky however
+        # many panes look at it. See ui/ibl.py for the environments.
+        self.environment: dict = dict(DEFAULT_ENVIRONMENT)
         self.named_views: dict = {}     # name -> camera params
         # Objects showing their control points. Kept here rather than on a
         # viewport because points on is something the drawing is doing: turn
@@ -347,6 +357,17 @@ class Scene:
             self.add(extra, layer_id=obj.layer_id)
         self.notify("objects")
         return obj
+
+    def set_environment(self, **changes):
+        """Change the PBR environment (name, rotation, exposure,
+        background). It is saved with the file, so it is an edit: the
+        revision moves and every pane hears of it."""
+        env = dict(self.environment or DEFAULT_ENVIRONMENT)
+        env.update(changes)
+        if env == self.environment:
+            return
+        self.environment = env
+        self.notify("environment")
 
     def realise_layer(self, layer_id: str) -> int:
         """Convert everything still deferred on a layer. Returns how many.
@@ -540,6 +561,7 @@ class Scene:
         self.block_defs = {}
         self.annot_styles = {}
         self.image_planes = []
+        self.environment = dict(DEFAULT_ENVIRONMENT)
         self.history_records = []
         self.trajectories = []
         self.session = None
