@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **A picture saved by a 0.9.x build of the fork still opens.** Those
+  builds kept a picture as a record of their own in the object list, and
+  a file with one in it would not open at all ("File was not written with
+  this version of the topology"), taking every other object with it. The
+  old record is read as the picture it was, crop window included.
 - **Held faces and edges of a solid move together, as one change.** Found
   through the band: a band across a box holds its faces and the edges
   between them, and `move` on that, or on four rim edges, did something

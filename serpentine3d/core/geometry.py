@@ -3445,6 +3445,32 @@ def _cloud_unpack(data: bytes, offset: int):
     return PointCloudShape(xyz, rgb, conf, level)
 
 
+#: Pictures saved by 0.9.x builds of the fork (a `SPIC` record: the image's
+#: path, the plane it lies on, a crop window in 0..1 and the pixel size)
+#: still open, as the picture they were.
+_OLD_PICTURE_TAG = b"SPIC\x01"
+
+
+def _picture_from_old_bytes(data: bytes):
+    import json
+    from .picture import PictureShape
+    old = json.loads(data[len(_OLD_PICTURE_TAG):].decode("utf-8"))
+    origin = [float(c) for c in old["origin"]]
+    u = [float(c) for c in old["u"]]
+    v = [float(c) for c in old["v"]]
+    plane = {"path": old.get("path", ""), "origin": origin, "u": u, "v": v}
+    s0, t0, s1, t1 = [float(c) for c in old.get("crop", (0.0, 0.0, 1.0, 1.0))]
+    if (s0, t0, s1, t1) != (0.0, 0.0, 1.0, 1.0):
+        # The crop was a window on the image; here it is the region shown,
+        # a rectangle on the same plane so the picture keeps its mapping.
+        def at(s, t):
+            return tuple(origin[i] + s * u[i] + t * v[i] for i in range(3))
+        corners = [at(s0, t0), at(s1, t0), at(s1, t1), at(s0, t1)]
+        return PictureShape(plane).with_region(
+            planar_face(make_polyline(corners, closed=True)))
+    return PictureShape(plane)
+
+
 def shape_from_bytes(data: bytes):
     from .text_object import TEXT_TAG, TextShape
     if data.startswith(TEXT_TAG):
@@ -3452,6 +3478,8 @@ def shape_from_bytes(data: bytes):
     from .picture import PICTURE_TAG, PictureShape
     if data.startswith(PICTURE_TAG):
         return PictureShape.from_bytes(data)
+    if data.startswith(_OLD_PICTURE_TAG):
+        return _picture_from_old_bytes(data)
     if data[:len(_CLOUD_TAG)] == _CLOUD_TAG:
         return _cloud_unpack(data, len(_CLOUD_TAG))
     if data[:len(_MESH_TAG)] == _MESH_TAG:
