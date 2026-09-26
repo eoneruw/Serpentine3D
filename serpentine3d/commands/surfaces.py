@@ -94,11 +94,15 @@ def cmd_loft(ctx):
 
 @command("planarsrf", aliases=("planar", "planesrf"))
 def cmd_planar(ctx):
-    curves = yield SelectReq("Select closed planar curves",
+    """Planar surfaces from curves that close into loops.
+
+    A closed curve, or open curves that meet end to end (four lines
+    drawn as a box). A loop inside another on the same plane is a hole.
+    """
+    curves = yield SelectReq("Select planar curves that close into loops",
                              kinds=("curve",), edges_as_curves=True)
-    made = []
-    for c in curves:
-        made.append(ctx.scene.add(g.planar_face(c.shape)))
+    faces = g.planar_faces_from_curves([c.shape for c in curves])
+    made = [ctx.scene.add(f, layer_id=curves[0].layer_id) for f in faces]
     ctx.echo(f"Created {len(made)} planar surface(s).")
 
 

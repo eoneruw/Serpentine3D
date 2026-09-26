@@ -295,7 +295,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `offsetsrf` | Offsetsrf |
 | `patch` (`networksrf`) | Patch |
 | `pipe` | Pipe |
-| `planarsrf` (`planar`, `planesrf`) | Planarsrf |
+| `planarsrf` (`planar`, `planesrf`) | Planar surfaces from curves that close into loops. |
 | `project` | Project |
 | `pull` | Pull |
 | `revolve` (`rev`) | Revolve |
