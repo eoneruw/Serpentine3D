@@ -2608,7 +2608,8 @@ class Viewport(QOpenGLWidget):
         if self.space != "model" and self._drawing_through() is not None:
             pts = self._on_paper(pts) if len(pts) else pts
             markers = [self._on_paper([m])[0] for m in markers]
-        snap = self._active_snap if self.point_mode else None
+        snap = (self._active_snap
+                if self.point_mode or self._cv_drag is not None else None)
         # An elevator standing before the first point has no leg drawn
         # against it, so without the axis itself on screen Ctrl looks like
         # it did nothing at all.
@@ -3556,6 +3557,19 @@ class Viewport(QOpenGLWidget):
         self.set_preview(None)
         self.update()
 
+    def _find_snap(self, *args, **kw):
+        """The object snaps, unless Alt is held: Rhino's way of saying
+        "not this time" without reaching for the Osnap bar. Dragging a
+        point in a Right view, the End of something on the far side of
+        the model sits right under the cursor, and the snap it offers is
+        the last thing you want; Alt keeps the point on the plane you
+        are dragging in.
+        """
+        if QApplication.queryKeyboardModifiers() \
+                & Qt.KeyboardModifier.AltModifier:
+            return None
+        return self.snaps.find(*args, **kw)
+
     def world_point_at(self, px: float, py: float):
         """Point for the pixel: object snap if near one, else CPlane (z=0).
 
@@ -3573,7 +3587,7 @@ class Viewport(QOpenGLWidget):
                 # because that is where they appear on screen. Before the grid,
                 # for the reason it is before it in the model: the grid is
                 # where a point goes when nothing better is near it.
-                snap = self.snaps.find(
+                snap = self._find_snap(
                     self._eye(), px, py, self.width(), self.height(),
                     base_point=self.snap_base,
                     pending_points=self.pending_points,
@@ -3620,7 +3634,7 @@ class Viewport(QOpenGLWidget):
             # left no way to run a line out to the height of something
             # already drawn. The snap cannot pull the point off the line,
             # but it can say where along it the thing it found sits.
-            snap = self.snaps.find(self.camera, px, py, self.width(),
+            snap = self._find_snap(self.camera, px, py, self.width(),
                                    self.height(), base_point=self.snap_base,
                                    pending_points=self.pending_points,
                                    picked_points=self.picked_points)
@@ -3637,7 +3651,7 @@ class Viewport(QOpenGLWidget):
             if self.grid_snap:
                 t = round(t / self.grid_snap_step) * self.grid_snap_step
             return tuple(float(c) for c in base + t * unit)
-        snap = self.snaps.find(self.camera, px, py, self.width(),
+        snap = self._find_snap(self.camera, px, py, self.width(),
                                self.height(), base_point=self.snap_base,
                                pending_points=self.pending_points,
                                picked_points=self.picked_points)
@@ -4266,9 +4280,20 @@ class Viewport(QOpenGLWidget):
             pass
         elif self._cv_drag is not None:
             obj_id, index, plane_pt, normal = self._cv_drag
-            origin, direction = self.camera.ray_through(
-                pos.x(), pos.y(), self.width(), self.height())
-            hit = ray_plane(origin, direction, plane_pt, normal)
+            # The object snaps first, the way they come first for a click:
+            # a point dragged near the end of another curve lands on it,
+            # which is how two curves are made to meet. Not on its own
+            # curve, which is always under the cursor while it is dragged.
+            snap = self._find_snap(self.camera, pos.x(), pos.y(),
+                                   self.width(), self.height(),
+                                   exclude=(obj_id,))
+            self._active_snap = snap
+            if snap is not None:
+                hit = np.asarray(snap[0], float)
+            else:
+                origin, direction = self.camera.ray_through(
+                    pos.x(), pos.y(), self.width(), self.height())
+                hit = ray_plane(origin, direction, plane_pt, normal)
             if hit is not None:
                 from ..core import geometry as _g
                 obj = self.scene.get(obj_id)
@@ -4485,6 +4510,8 @@ class Viewport(QOpenGLWidget):
             return
         if self._cv_drag is not None:
             self._cv_drag = None
+            self._active_snap = None       # the marker goes with the drag
+            self.update()
             return
         self._finish_pick(ev)
 
