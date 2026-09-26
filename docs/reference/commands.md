@@ -173,7 +173,7 @@ Commands that need a file open a filtered chooser by default. Append
 | `recordhistory` (`history`) | Toggle record history: loft/extrude/revolve outputs rebuild when |
 | `redo` | Redo |
 | `removecontrolpoint` | Delete the control points you are holding, as Delete does. |
-| `removeknot` | Take a knot out of a curve and say how far the curve moved. |
+| `removeknot` | Take a knot out of a curve, or a row (Direction U/V/Both) out of a surface, and say how far it moved. Delete on held surface points takes their row out too. |
 | `rename` | Rename |
 | `selall` (`sa`) | Selall |
 | `selnone` (`sn`) | Selnone |

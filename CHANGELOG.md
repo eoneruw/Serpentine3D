@@ -82,6 +82,12 @@
 
 ### Added
 
+- **A row of control points comes off a surface.** `removeknot` takes
+  surfaces now, with a Direction (U row, V column, Both) and the
+  surface ghosted as it will be; and Delete on held surface control
+  points takes out the row or column they sit on, since a surface's
+  points come in rows and one cannot go alone. Both say how far the
+  surface moved. Delete used to answer "Not a curve" and do nothing.
 - **Environments for the PBR mode.** One procedural studio lit
   everything; now the Display panel (mode Rendered (PBR)) and the
   `environment` command offer Studio, Well-lit studio, Sunny day,
