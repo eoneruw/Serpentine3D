@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Explode takes a mesh apart.** It raised (`'MeshShape' object has no
+  attribute 'ShapeType'`) and cancelled. A mesh comes apart into its
+  connected pieces now — a scan of many parts saved as one mesh
+  separates at the gaps between them; one piece stays one.
 - **A held edge on a plain surface no longer turns the gumball into a
   fillet handle.** The handle asked OCCT to fillet a border edge — one
   face, nothing to round between — and OCCT raised from inside the
