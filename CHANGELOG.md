@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **A surface made from a painted surface is painted the same.** Offset,
+  blend, extract, explode, split, trim and boolean split carried the
+  layer across but not the colour or material, so a red car-paint
+  panel gave grey offsets and blends. They go through the scene's
+  add_from now, and the paint comes with them.
 - **InsertKnot's new row lands where you pointed.** The knot went in at
   the picked spot, but a knot at u is not a control point at u — a handle
   acts at the mean of the knots beside it — so on a curved surface the new

@@ -452,8 +452,7 @@ def cmd_extractsrf(ctx):
         obj = ctx.scene.get(obj_id)
         faces = g.faces_of(obj.shape)
         for i in sorted(set(indices)):
-            made.append(ctx.scene.add(g.copy_shape(faces[i]),
-                                      layer_id=obj.layer_id))
+            made.append(ctx.scene.add_from(g.copy_shape(faces[i]), obj))
         if copy == "Yes":
             continue
         rest = g.remove_faces(obj.shape, indices)

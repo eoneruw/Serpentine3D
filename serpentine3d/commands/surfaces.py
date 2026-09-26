@@ -144,8 +144,8 @@ def cmd_offsetsrf(ctx):
         return
     made = []
     for o in objs:
-        made.append(ctx.scene.add(g.offset_surface(o.shape, dist),
-                                  layer_id=o.layer_id))
+        made.append(ctx.scene.add_from(g.offset_surface(o.shape, dist),
+                                       o))
     ctx.echo(f"Offset {len(made)} surface(s).")
 
 
