@@ -1251,6 +1251,13 @@ class Viewport(QOpenGLWidget):
         self._centre_cache: dict[str, np.ndarray] = {}
         self._tessDone.connect(self._on_tess_done,
                                Qt.ConnectionType.QueuedConnection)
+        # A cut can land after the pane is gone — a window closed with a
+        # drag just finished, every test's teardown — and a signal on a
+        # deleted widget takes the process down. The flag outlives the
+        # widget for the pool thread to read.
+        self._alive = [True]
+        alive = self._alive
+        self.destroyed.connect(lambda *_: alive.__setitem__(0, False))
         self._recutDone.connect(self._on_recut_done,
                                 Qt.ConnectionType.QueuedConnection)
         self._preview: _LineBatch | None = None
@@ -5093,11 +5100,7 @@ class Viewport(QOpenGLWidget):
                     mesh = fut.result()
                 except Exception:                          # noqa: BLE001
                     mesh = None         # no helper: the next paint cuts it
-                # The cut can land after the pane is gone — a window closed
-                # with a drag just finished, every test's teardown — and a
-                # signal on a deleted widget takes the process down.
-                import shiboken6
-                if shiboken6.isValid(self):
+                if self._alive[0]:      # the pane may be gone by now
                     self._recutDone.emit((oid, shape, mesh))
 
             future.add_done_callback(done)
